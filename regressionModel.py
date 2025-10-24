@@ -9,6 +9,7 @@ from torch.utils.data import Dataset
 # Plan is to make simple MLP model
 # Start with 2 layers -> if underfitting then increase # of layers/nodes
 # Use sigmoid function on output? -> make sure training data uses 0-1 range outputs
+# Ensure to use ReLU on hidden layers to avoid vanishing gradient
 # Should likely use MSELoss for calculating error
 # Adam is probably the best optimizer to use for the task with a learning rate ~0.01
 DATASETS_DIRECTORY = "/datasets/"
@@ -32,8 +33,14 @@ class EmotionConfigurationDataset(Dataset):
 class EmotionConfigurationModel(nn.Module):
     def __init__(self):
         super(EmotionConfigurationModel, self).__init__()
-        # TODO: define model layers
-        self.modelLayers = nn.Sequential()
+        self.modelLayers = nn.Sequential(
+            nn.Linear(7, 64),
+            nn.ReLU(),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Linear(32, 7),
+            nn.Sigmoid()
+        )
     
     def forward(self, inputTensor):
         return self.modelLayers(inputTensor)
@@ -57,11 +64,21 @@ def trainModel(emotionConfigurationModel, emotionConfigurationDataset):
     lossCriterion = nn.MSELoss()
     adamOptimiser = optim.Adam(emotionConfigurationModel, lr=0.001)
     # Iterate over epochs, then over input-target pairings
-    # calculate loss for each epoch using the lossCriterion
     # Standard steps are:
     # Clear optimiser gradients
     # Forward pass through the model (find current prediction)
     # Calculate epoch loss based on output and target values
     # Backward pass to recalculate gradients (adjust for next epoch)
     # Update model weights
-    pass
+    for _ in range(EPOCH_COUNT):
+        # calculate loss for each epoch using the lossCriterion
+        epochLoss = 0
+        for inputParameters, targetValues in emotionConfigurationDataset:
+            adamOptimiser.zero_grad()
+            # fwd pass
+            predictedValues = emotionConfigurationModel(inputParameters)
+            currentLoss = lossCriterion(predictedValues, targetValues)
+            currentLoss.backward()
+            adamOptimiser.step()
+            epochLoss += currentLoss.item()
+        print(f"Epoch loss: {epochLoss}")

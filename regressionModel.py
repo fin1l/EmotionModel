@@ -9,6 +9,7 @@ from torch.utils.data import Dataset
 # Plan is to make simple MLP model
 # Start with 2 layers -> if underfitting then increase # of layers/nodes
 # Use sigmoid function on output? -> make sure training data uses 0-1 range outputs
+# -> This prevents extreme camera configurations
 # Ensure to use ReLU on hidden layers to avoid vanishing gradient
 # Should likely use MSELoss for calculating error
 # Adam is probably the best optimizer to use for the task with a learning rate ~0.01

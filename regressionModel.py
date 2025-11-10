@@ -39,7 +39,7 @@ class EmotionConfigurationModel(nn.Module):
             nn.ReLU(),
             nn.Linear(64, 32),
             nn.ReLU(),
-            nn.Linear(32, 7),
+            nn.Linear(32, 6),
             nn.Sigmoid()
         )
     

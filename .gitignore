@@ -142,4 +142,5 @@ cython_debug/
 .cursorindexingignore
 
 # Project Specific
-EmotionsRenders/
+EmotionRenders/*
+dataLabelUtils/*.blend1

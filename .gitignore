@@ -142,4 +142,4 @@ cython_debug/
 .cursorindexingignore
 
 # Project Specific
-EmotionsRenders/*
+EmotionsRenders/

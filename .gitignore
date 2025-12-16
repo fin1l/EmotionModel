@@ -143,4 +143,5 @@ cython_debug/
 
 # Project Specific
 EmotionRenders/*
+!EmotionRenders/labels.json
 dataLabelUtils/*.blend1

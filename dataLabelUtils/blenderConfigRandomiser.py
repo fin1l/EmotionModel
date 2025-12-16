@@ -15,6 +15,7 @@ import math
 import random
 import os
 import json
+import re # used for extracting numbers
 
 # The expected format of lighting is a 3-point light set up with a key light, rim light, and fill light
 # Use HSV instead of RGB for colour (more cinematic, hues, saturation, and vibrancy represent emotion better)
@@ -131,8 +132,6 @@ def isLight(self, object):
 
 parameterGenerationFunctions = [happyParams, sadParams, angerParams, fearParams, calmParams, cozyParams, amazementParams]
 
-import bpy
-
 def setupNoiseCompositor(scene, grain_intensity):
     if grain_intensity <= 0:
         return
@@ -233,9 +232,6 @@ def randomiseConfig(context):
     camera.data.lens_unit = 'FOV'
     camera.data.angle = math.radians(parameters['fov'])
     setupNoiseCompositor(scene, parameters['grain'])
-    #scene.eevee.use_film_grain = True
-    #scene.eevee.film_grain_amount = parameters['grain']
-    #scene.eevee.film_grain_scale = 1
     
     targetRGB = colorsys.hsv_to_rgb(wrapHue(parameters['h']), parameters['s'], 1.0)
     targetLight.data.color = targetRGB
@@ -315,10 +311,22 @@ class WM_OT_BatchGenerate(bpy.types.Operator):
         scene = context.scene
         output_dir = bpy.path.abspath(scene.batchOutputPath)
         imageDirectory = os.path.join(output_dir, "images")
+        startInd = 0
         if not os.path.exists(imageDirectory):
             os.makedirs(imageDirectory)
-            
+        else:
+            numberPattern = re.compile("\d+")
+            # Find max image number existing
+            lastFileNum = -1
+            for fileName in os.listdir(imageDirectory):
+                if re.fullmatch("image(\d+)\.png", fileName):
+                    lastFileNum = max(lastFileNum, int(numberPattern.search(fileName)[0]))
+            startInd = lastFileNum + 1
+        jsonPath = os.path.join(output_dir, "labels.json")
         dataList = []
+        if os.path.exists(jsonPath):
+            with open(jsonPath, 'r') as f:
+                dataList = json.load(f)
         
         self.report({'INFO'}, f"Generating {scene.batchImageCount} images")
         
@@ -329,7 +337,7 @@ class WM_OT_BatchGenerate(bpy.types.Operator):
 
         for i in range(scene.batchImageCount):
             params = randomiseConfig(context)
-            imageName = f"image{i:04d}.png"
+            imageName = f"image{startInd+i}.png"
             scene.render.filepath = os.path.join(imageDirectory, imageName)
             bpy.ops.render.render(write_still=True)
             
@@ -342,10 +350,8 @@ class WM_OT_BatchGenerate(bpy.types.Operator):
             
             self.report({'INFO'}, f"Rendered {imageName}")
 
-        jsonPath = os.path.join(output_dir, "labels.json")
         with open(jsonPath, 'w') as f:
-            json.dump(dataList, f, indent=2)
-            
+                json.dump(dataList, f, indent=2)
         scene.render.filepath = filepath
         scene.render.image_settings.file_format = fileFormat
         

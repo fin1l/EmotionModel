@@ -311,22 +311,28 @@ class WM_OT_BatchGenerate(bpy.types.Operator):
         scene = context.scene
         output_dir = bpy.path.abspath(scene.batchOutputPath)
         imageDirectory = os.path.join(output_dir, "images")
-        startInd = 0
+        jsonPath = os.path.join(output_dir, "labels.json")
+        # Prioritise getting the most recent json label, fall back to existing image
+        numberMatchingPattern = re.compile("\d+")
+        dataList = []
+        lastFileNum = -1
+        if os.path.exists(jsonPath):
+            # Assume the most recent image_id is the highest
+            # This should be the case
+            with open(jsonPath, 'r') as f:
+                dataList = json.load(f)
+            fileName = dataList[-1]["image_id"]
+            lastFileNum = int(numberMatchingPattern.search(fileName)[0])
         if not os.path.exists(imageDirectory):
             os.makedirs(imageDirectory)
         else:
-            numberPattern = re.compile("\d+")
             # Find max image number existing
-            lastFileNum = -1
             for fileName in os.listdir(imageDirectory):
                 if re.fullmatch("image(\d+)\.png", fileName):
-                    lastFileNum = max(lastFileNum, int(numberPattern.search(fileName)[0]))
-            startInd = lastFileNum + 1
-        jsonPath = os.path.join(output_dir, "labels.json")
-        dataList = []
-        if os.path.exists(jsonPath):
-            with open(jsonPath, 'r') as f:
-                dataList = json.load(f)
+                    lastFileNum = max(lastFileNum, int(numberMatchingPattern.search(fileName)[0]))
+        # Set the starting index to count images from
+        startInd = lastFileNum + 1
+        
         
         self.report({'INFO'}, f"Generating {scene.batchImageCount} images")
         

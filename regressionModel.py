@@ -1,21 +1,16 @@
 import os
+import math
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import pandas as pd
 import numpy as np
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 
-# Plan is to make simple MLP model
-# Start with 2 layers -> if underfitting then increase # of layers/nodes
-# Use sigmoid function on output? -> make sure training data uses 0-1 range outputs
-# -> This prevents extreme camera configurations
-# Ensure to use ReLU on hidden layers to avoid vanishing gradient
-# Should likely use MSELoss for calculating error
-# Adam is probably the best optimizer to use for the task with a learning rate ~0.01
-DATASETS_DIRECTORY = "/datasets/"
-MODELS_DIRECTORY = "/models/"
-EPOCH_COUNT = 5
+DATASETS_DIRECTORY = "./datasets/"
+MODELS_DIRECTORY = "./models/"
+EPOCH_COUNT = 50
+BATCH_SIZE = 4
 
 class EmotionConfigurationDataset(Dataset):
     def __init__(self, csvFile):
@@ -27,8 +22,14 @@ class EmotionConfigurationDataset(Dataset):
     def __getitem__(self, index):
         if torch.is_tensor(index):
             index = index.tolist()
-        emotionVector = self.emotionConfigurationFrames.iloc[index, :7]
-        sceneConfiguration = self.emotionConfigurationFrames.iloc[index, 7:]
+        emotionVector = torch.tensor(
+            self.emotionConfigurationFrames.iloc[index, :7].values, 
+            dtype=torch.float32
+        )
+        sceneConfiguration = torch.tensor(
+            self.emotionConfigurationFrames.iloc[index, 7:].values, 
+            dtype=torch.float32
+        )
         return {'emotion': emotionVector, 'configuration': sceneConfiguration}
 
 class EmotionConfigurationModel(nn.Module):
@@ -36,9 +37,9 @@ class EmotionConfigurationModel(nn.Module):
         super(EmotionConfigurationModel, self).__init__()
         self.modelLayers = nn.Sequential(
             nn.Linear(7, 64),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Linear(64, 32),
-            nn.ReLU(),
+            nn.ELU(),
             nn.Linear(32, 6),
             nn.Sigmoid()
         )
@@ -53,6 +54,8 @@ def saveModel(model, modelName):
     torch.save(model.state_dict(), MODELS_DIRECTORY + modelName)
 
 # Note: using a loaded model for predictions, use torch.no_grad() for resource saving
+# Need to check behaviour due to how AdamW optimiser operates:
+# https://docs.pytorch.org/docs/stable/generated/torch.optim.AdamW.html
 def loadModel(modelName):
     if len(modelName)<4 or modelName[-4:] != ".pth":
         modelName = modelName + ".pth"
@@ -62,8 +65,17 @@ def loadModel(modelName):
     return newModel
 
 def trainModel(emotionConfigurationModel, emotionConfigurationDataset):
+    trainLoader = DataLoader(
+        emotionConfigurationDataset, 
+        batch_size=BATCH_SIZE, 
+        shuffle=True
+    )
     lossCriterion = nn.MSELoss()
-    adamOptimiser = optim.Adam(emotionConfigurationModel, lr=0.001)
+    #optimiser = optim.Adam(emotionConfigurationModel, lr=0.001)
+    optimiser = torch.optim.AdamW(
+        emotionConfigurationModel.parameters(), lr=0.001,
+        weight_decay=0.01   # Critical for regularisation in small datasets
+    )
     # Iterate over epochs, then over input-target pairings
     # Standard steps are:
     # Clear optimiser gradients
@@ -71,15 +83,79 @@ def trainModel(emotionConfigurationModel, emotionConfigurationDataset):
     # Calculate epoch loss based on output and target values
     # Backward pass to recalculate gradients (adjust for next epoch)
     # Update model weights
-    for _ in range(EPOCH_COUNT):
+    emotionConfigurationModel.train()
+    for epochNumber in range(EPOCH_COUNT):
         # calculate loss for each epoch using the lossCriterion
-        epochLoss = 0
-        for inputParameters, targetValues in emotionConfigurationDataset:
-            adamOptimiser.zero_grad()
+        epochLoss = 0.0
+        for batchData in trainLoader:
+            # Unpack the dictionary from the dataset
+            inputParameters = batchData['emotion']
+            targetValues = batchData['configuration']
+            optimiser.zero_grad()
             # fwd pass
             predictedValues = emotionConfigurationModel(inputParameters)
             currentLoss = lossCriterion(predictedValues, targetValues)
             currentLoss.backward()
-            adamOptimiser.step()
+            optimiser.step()
             epochLoss += currentLoss.item()
-        print(f"Epoch loss: {epochLoss}")
+        averageLoss = epochLoss / len(trainLoader)
+        print(f"Epoch {epochNumber} loss: {averageLoss}")
+
+def testModel(modelName, emotionInput):
+    model = EmotionConfigurationModel()
+    
+    # Load model weights from file
+    path = MODELS_DIRECTORY + modelName + ".pth"
+    model.load_state_dict(torch.load(path))
+
+    # Set model to evaluation mode
+    model.eval()
+    inputTensor = torch.tensor([emotionInput], dtype=torch.float32)
+    
+    # Run inference (no gradient needed)
+    with torch.no_grad():
+        rawOutput = model(inputTensor)
+    
+    return rawOutput.tolist()[0]
+
+def mapRawOutput(rawOutput):
+    #Using the constants from the data processing:
+    #PARAMETER_MIN_MAX = {
+    #    "hueSin": [-1, 1],
+    #    "hueCos": [-1, 1],
+    #    "saturation": [0.2, 1],
+    #    "light_energy": [math.log(50), math.log(3000)],
+    #    "grain": [0, 0.4],
+    #    "fov": [25, 100]
+    #}
+    parameters = {}
+    # Calculate hue
+    hSin, hCos = rawOutput[0] * 2 - 1, rawOutput[1] * 2 - 1
+    parameters["hue"] = math.atan2(hSin, hCos) / (2 * math.pi)
+    if parameters["hue"] < 0: parameters["hue"] += 1
+    parameters["saturation"] = rawOutput[2] * 0.8 + 0.2
+    # Using log laws, log 3000 - log 50 = log 60
+    parameters["lightEnergy"] = math.exp(rawOutput[3] * math.log(60) + math.log(50))
+    parameters["grain"] = rawOutput[4] * 0.4
+    parameters["fov"] = rawOutput[5] * 75 + 25
+    return parameters
+
+PERFORM_INFERENCE = True
+
+if __name__ == "__main__":
+    if PERFORM_INFERENCE:
+        fearVector = [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]
+        fearOutput = testModel("emotionModelInitial", fearVector)
+        print(mapRawOutput(fearOutput))
+    else:
+        csvPath = os.path.join(DATASETS_DIRECTORY, "trainingData.csv")
+        
+        if os.path.exists(csvPath):
+            dataset = EmotionConfigurationDataset(csvPath)
+            model = EmotionConfigurationModel()
+            
+            trainModel(model, dataset)
+            
+            saveModel(model, "emotionModelInitial")
+        else:
+            print(f"Error: CSV not found at {csvPath}")

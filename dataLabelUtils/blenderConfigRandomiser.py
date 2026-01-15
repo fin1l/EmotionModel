@@ -271,7 +271,7 @@ def randomiseConfig(context):
     
     # Circular hue can make it difficult for a model to predict colour
     # 0.0 is the same as 1.0 - this can be fixed by predicting sin + cos of hue and converting back
-    # Conversion back is hue = math.atan2(hueSin, hueCos)
+    # Conversion back is hue = math.atan2(hueSin, hueCos) * 2PI
     outputParams = {}
     outputParams['hueSin'] = math.sin(2 * math.pi * parameters['h'])
     outputParams['hueCos'] = math.cos(2 * math.pi * parameters['h'])

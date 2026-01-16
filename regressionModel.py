@@ -47,6 +47,23 @@ class EmotionConfigurationModel(nn.Module):
     def forward(self, inputTensor):
         return self.modelLayers(inputTensor)
 
+class DeepEmotionModel(nn.Module):
+    def __init__(self):
+        super(DeepEmotionModel, self).__init__()
+        self.modelLayers = nn.Sequential(
+            nn.Linear(7, 256),
+            nn.ELU(),
+            nn.Linear(256, 64),
+            nn.ELU(),
+            nn.Linear(64, 32),
+            nn.ELU(),
+            nn.Linear(32, 6),
+            nn.Sigmoid()
+        )
+    
+    def forward(self, inputTensor):
+        return self.modelLayers(inputTensor)
+
 def saveModel(model, modelName):
     # Add file extension if not already included
     if len(modelName)<4 or modelName[-4:] != ".pth":
@@ -98,11 +115,15 @@ def trainModel(emotionConfigurationModel, emotionConfigurationDataset):
             currentLoss.backward()
             optimiser.step()
             epochLoss += currentLoss.item()
-        averageLoss = epochLoss / len(trainLoader)
-        print(f"Epoch {epochNumber} loss: {averageLoss}")
+        if epochNumber % 5 == 0:
+            averageLoss = epochLoss / len(trainLoader)
+            print(f"Epoch {epochNumber} loss: {averageLoss}")
 
-def testModel(modelName, emotionInput):
-    model = EmotionConfigurationModel()
+def testModel(modelName, emotionInput, baseModel = None):
+    if baseModel:
+        model = baseModel
+    else:
+        model = EmotionConfigurationModel()
     
     # Load model weights from file
     path = MODELS_DIRECTORY + modelName + ".pth"
@@ -145,17 +166,17 @@ PERFORM_INFERENCE = True
 if __name__ == "__main__":
     if PERFORM_INFERENCE:
         fearVector = [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]
-        fearOutput = testModel("emotionModelInitial", fearVector)
+        fearOutput = testModel("emotionModelDeepened", fearVector, baseModel=DeepEmotionModel())
         print(mapRawOutput(fearOutput))
     else:
         csvPath = os.path.join(DATASETS_DIRECTORY, "trainingData.csv")
         
         if os.path.exists(csvPath):
             dataset = EmotionConfigurationDataset(csvPath)
-            model = EmotionConfigurationModel()
+            model = DeepEmotionModel()
             
             trainModel(model, dataset)
             
-            saveModel(model, "emotionModelInitial")
+            saveModel(model, "emotionModelDeepened")
         else:
             print(f"Error: CSV not found at {csvPath}")

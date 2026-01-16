@@ -18,10 +18,10 @@ import json
 import re # used for extracting numbers
 
 # The expected format of lighting is a 3-point light set up with a key light, rim light, and fill light
-# Use HSV instead of RGB for colour (more cinematic, hues, saturation, and vibrancy represent emotion better)
+# Use HSV instead of RGB for colour (more cinematic, hues, saturation, and value represent emotion better)
 import colorsys
 
-# want high vibrancy for all of them so do not bother randomising vibrancy
+# want high value for all of them so do not bother randomising value
 def wrapHue(hue):
     return hue % 1.0
 
@@ -30,11 +30,24 @@ def randomHueSat(hMin, hMax, sMin, sMax):
 # Use exp for light energy if it isn't a sun - otherwise use uniform
 # This is due to perceptual difference in intensity, use different units
 # Functions to define randomisation with an emotional bias
-def happyParams(targetLightType):
+def joyParams(targetLightType):
     print("Happy params")
     # Bright + warm colors, normal FOV, low grain
     params = {}
     params['h'], params['s'] = randomHueSat(0.05, 0.15, 0.7, 1)
+    if targetLightType == 'SUN':
+        params['light_energy'] = random.uniform(2,4)
+    else:
+        params['light_energy'] = math.exp(random.uniform(math.log(800), math.log(1500)))
+    params['fov'] = random.uniform(40, 60)
+    params['grain'] = random.uniform(0.0, 0.1)
+    return params
+
+def acceptanceParams(targetLightType):
+    print("Acceptance params")
+    # Soft yellows + greens, normal FOV, low grain
+    params = {}
+    params['h'], params['s'] = randomHueSat(0.13, 0.23, 0.3, 0.55)
     if targetLightType == 'SUN':
         params['light_energy'] = random.uniform(2,4)
     else:
@@ -86,35 +99,42 @@ def fearParams(targetLightType):
     params['grain'] = random.uniform(0.2, 0.4)
     return params
 
-def calmParams(targetLightType):
-    print("Calm params")
-    # Soft colours (low saturation), wide FOV, low grain
+def disgustParams(targetLightType):
+    print("Disgust params")
+    # Sickly + dark colours, extreme FOV, high grain
+    params = {}
+    # Choose either sickly green or sickly purple
+    if random.random() > 0.5:
+        params['h'], params['s'] = randomHueSat(0.18, 0.28, 0.6, 0.9)
+    else:
+        params['h'], params['s'] = randomHueSat(0.75, 0.83, 0.4, 0.7)
+    if targetLightType == 'SUN':
+        params['light_energy'] = random.uniform(0.05,0.2)
+    else:
+        params['light_energy'] = math.exp(random.uniform(math.log(50), math.log(200)))
+    # randomly pick extreme
+    if random.random()>0.5:
+        params['fov'] = random.uniform(25, 35)
+    else:
+        params['fov'] = random.uniform(90, 100)
+    params['grain'] = random.uniform(0.2, 0.4)
+    return params
+
+def expectationParams(targetLightType):
+    print("Expectation params")
+    # Soft colours (low saturation), low FOV, low grain
     params = {}
     params['h'], params['s'] = randomHueSat(0.5, 0.7, 0.2, 0.4)
     if targetLightType == 'SUN':
         params['light_energy'] = random.uniform(2,4)
     else:
         params['light_energy'] = math.exp(random.uniform(math.log(1000), math.log(2000)))
-    params['fov'] = random.uniform(70, 90)
+    params['fov'] = random.uniform(30, 50)
     params['grain'] = random.uniform(0, 0.05)
     return params
 
-def cozyParams(targetLightType):
-    print("Cozy params")
-    # deep, warm colours, low FOV, low/med grain
-    # Ideally this uses a point light and not a sun for 'coziness'
-    params = {}
-    params['h'], params['s'] = randomHueSat(0.0, 0.1, 0.8, 1)
-    if targetLightType == 'SUN':
-        params['light_energy'] = random.uniform(0.05, 0.3)
-    else:
-        params['light_energy'] = math.exp(random.uniform(math.log(150), math.log(400)))
-    params['fov'] = random.uniform(30, 45)
-    params['grain'] = random.uniform(0, 0.15)
-    return params
-
-def amazementParams(targetLightType):
-    print("Amazement params")
+def surpriseParams(targetLightType):
+    print("Surprise params")
     # deep, cool colours, high FOV, low grain
     params = {}
     params['h'], params['s'] = randomHueSat(0.6, 0.75, 0.8, 1)
@@ -130,7 +150,7 @@ def amazementParams(targetLightType):
 def isLight(self, object):
     return object.type == 'LIGHT'
 
-parameterGenerationFunctions = [happyParams, sadParams, angerParams, fearParams, calmParams, cozyParams, amazementParams]
+parameterGenerationFunctions = [fearParams, angerParams, joyParams, sadParams, acceptanceParams, disgustParams, expectationParams, surpriseParams, ]
 
 def setupNoiseCompositor(scene, grain_intensity):
     if grain_intensity <= 0:
@@ -212,7 +232,6 @@ def setupNoiseCompositor(scene, grain_intensity):
 
     if alphaOverNode.outputs['Image'] and groupOutputNode.inputs[0]:
         tree.links.new(alphaOverNode.outputs['Image'], groupOutputNode.inputs[0])
-    print(f"graininess: {grain_intensity}")
 
 def randomiseConfig(context):
     """

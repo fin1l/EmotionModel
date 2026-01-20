@@ -51,7 +51,7 @@ def acceptanceParams(targetLightType):
     if targetLightType == 'SUN':
         params['light_energy'] = random.uniform(2,4)
     else:
-        params['light_energy'] = math.exp(random.uniform(math.log(800), math.log(1500)))
+        params['light_energy'] = math.exp(random.uniform(math.log(800), math.log(1200)))
     params['fov'] = random.uniform(40, 60)
     params['grain'] = random.uniform(0.0, 0.1)
     return params
@@ -111,7 +111,7 @@ def disgustParams(targetLightType):
     if targetLightType == 'SUN':
         params['light_energy'] = random.uniform(0.05,0.2)
     else:
-        params['light_energy'] = math.exp(random.uniform(math.log(50), math.log(200)))
+        params['light_energy'] = math.exp(random.uniform(math.log(300), math.log(800)))
     # randomly pick extreme
     if random.random()>0.5:
         params['fov'] = random.uniform(25, 35)

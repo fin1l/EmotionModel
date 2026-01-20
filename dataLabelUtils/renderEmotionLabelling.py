@@ -1,6 +1,8 @@
-import PySimpleGUI as sg
+import FreeSimpleGUI as sg
 import json
 import os
+import io
+from PIL import Image
 
 DEFAULT_DATA_FOLDER = "" 
 
@@ -42,17 +44,29 @@ def createMainUI():
                 orientation='h', size=(40, 15), key=f"-SLIDER-{index}-")
         ])
     layout = [
-        [sg.Text("Image:", size=(5,1)), sg.Text("", key="-IMAGE-ID-", size=(60,1))],
-        [sg.Image(key="-IMAGE-DISPLAY-", size=(800, 600), background_color='black')],
+        [sg.Text("Image:", size=(5,1)), sg.Text("", key="-IMAGE-ID-", size=(30,1))],
+        [sg.Image(key="-IMAGE-DISPLAY-", size=(100, 100), background_color='black')],
         [sg.HorizontalSeparator()], *sliders, [sg.HorizontalSeparator()],
         [sg.Button("Next", key="-SAVE-", size=(15, 2)), sg.Button("Exit", size=(10, 2)),
          sg.Text("", key="-STATUS-", size=(40, 1))]
     ]
     return sg.Window("Data Labelling", layout, finalize=True, resizable=True)
 
+def resize_image(image_path, max_size=(200, 200)):
+    """Resize image to fit within max_size while maintaining aspect ratio"""
+    img = Image.open(image_path)
+    img.thumbnail(max_size, Image.Resampling.LANCZOS)
+    
+    # Convert to bytes
+    bio = io.BytesIO()
+    img.save(bio, format='PNG')
+    return bio.getvalue()
+
 def loadImage(window, imagePath):
     try:
-        window["-IMAGE-DISPLAY-"].update(source=imagePath)
+        #window["-IMAGE-DISPLAY-"].update(filename=imagePath)
+        window["-IMAGE-DISPLAY-"].update(data=resize_image(imagePath))
+        #window["-IMAGE-DISPLAY-"].update(size=(100,100))
     except Exception as e:
         print(f"Error loading image {imagePath}: {e}")
         window["-IMAGE-DISPLAY-"].update(data=None)
@@ -70,6 +84,12 @@ def main():
     if current_index is None:
         sg.popup("Labelling done")
         return
+    # Handle case of more images than labels
+    minImageName = sorted(os.listdir(imagesPath))
+    minImageName = minImageName[0]
+    minImageIndex = int(minImageName.split(".")[0][5:])
+    current_index = max(current_index, minImageIndex)
+    
     window = createMainUI()
 
     entry = data[current_index]

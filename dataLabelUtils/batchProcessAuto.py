@@ -10,7 +10,6 @@ def runBatchProcess():
         args = sys.argv[sys.argv.index("--") + 1:]
     else:
         args = []
-
     scene = bpy.context.scene
     # can technically skip as they should be saved
     currentDir = os.getcwd()

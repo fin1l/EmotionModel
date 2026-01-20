@@ -145,3 +145,4 @@ cython_debug/
 EmotionRenders/*
 !EmotionRenders/labels.json
 dataLabelUtils/*.blend1
+*.png

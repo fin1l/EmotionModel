@@ -11,29 +11,38 @@ DATASETS_DIRECTORY = "./datasets/"
 MODELS_DIRECTORY = "./models/"
 EPOCH_COUNT = 50
 BATCH_SIZE = 4
+LEARNING_RATE = 0.001
 # Constants specify output
 VERBOSE_TRAINING = False
-LEARNING_CURVE_INTERPOLATION = True
+# 0 - perform learning curve extrapolation
+# 1 - learning rate search
+# 2 - train model normally
+EXECUTION_MODE = 2
 
 class EmotionConfigurationDataset(Dataset):
-    def __init__(self, csvFile):
+    def __init__(self, csvFile, device=torch.device("cpu"), size=-1):
         self.emotionConfigurationFrames = pd.read_csv(csvFile)
+        if size == -1:
+            size = len(self.emotionConfigurationFrames)
+        self.emotionVectors = torch.tensor(
+            self.emotionConfigurationFrames.iloc[:size, :7].values, 
+            dtype=torch.float32
+        ).to(device)
+        self.configurationVectors = torch.tensor(
+            self.emotionConfigurationFrames.iloc[:size, 7:].values, 
+            dtype=torch.float32
+        ).to(device)
 
     def __len__(self):
-        return len(self.emotionConfigurationFrames)
+        return len(self.emotionVectors)
     
     def __getitem__(self, index):
         if torch.is_tensor(index):
             index = index.tolist()
-        emotionVector = torch.tensor(
-            self.emotionConfigurationFrames.iloc[index, :7].values, 
-            dtype=torch.float32
-        )
-        sceneConfiguration = torch.tensor(
-            self.emotionConfigurationFrames.iloc[index, 7:].values, 
-            dtype=torch.float32
-        )
-        return {'emotion': emotionVector, 'configuration': sceneConfiguration}
+        return {
+            'emotion': self.emotionVectors[index], 
+            'configuration': self.configurationVectors[index]
+        }
 
 class EmotionConfigurationModel(nn.Module):
     def __init__(self):
@@ -84,22 +93,25 @@ def loadModel(modelName):
     newModel.eval()
     return newModel
 
-def trainModel(emotionConfigurationModel, trainLoader, valLoader=None):
+def trainModel(emotionConfigurationModel, trainLoader, valLoader=None, epochCount = EPOCH_COUNT):
     lossCriterion = nn.MSELoss()
     optimiser = optim.AdamW(
-        emotionConfigurationModel.parameters(), lr=0.001,
+        emotionConfigurationModel.parameters(), lr=LEARNING_RATE,
         weight_decay=0.01   # Critical for regularisation in small datasets
     )
     emotionConfigurationModel.train()
     # Track final validation loss
     finalValLoss = 0.0
-    for epochNumber in range(EPOCH_COUNT):
+    bestLoss = math.inf
+    plateauedEpochs = 0
+    PLATEAU_THRESHOLD = 5
+    for epochNumber in range(epochCount):
         # calculate loss for each epoch using the lossCriterion
         epochLoss = 0.0
         for batchData in trainLoader:
             # Unpack the dictionary from the dataset
-            inputParameters = batchData['emotion']
-            targetValues = batchData['configuration']
+            inputParameters = batchData['emotion'].to(device)
+            targetValues = batchData['configuration'].to(device)
             optimiser.zero_grad()
             # fwd pass
             predictedValues = emotionConfigurationModel(inputParameters)
@@ -111,9 +123,18 @@ def trainModel(emotionConfigurationModel, trainLoader, valLoader=None):
             if VERBOSE_TRAINING:
                 averageLoss = epochLoss / len(trainLoader)
                 print(f"Epoch {epochNumber} loss: {averageLoss}")
-            if valLoader:
-                finalValLoss = validateModel(emotionConfigurationModel, valLoader, lossCriterion)
-    return finalValLoss
+        if valLoader:
+            finalValLoss = validateModel(emotionConfigurationModel, valLoader, lossCriterion)
+            if finalValLoss < bestLoss:
+                bestLoss = finalValLoss
+                plateauedEpochs = 0
+            else:
+                plateauedEpochs += 1
+                if plateauedEpochs >= PLATEAU_THRESHOLD:
+                    print(f"Early termination at {epochNumber} epochs")
+                    print(f"Currently at {finalValLoss}, achieved {bestLoss}")
+                    break
+    return finalValLoss, bestLoss
 
 def validateModel(model, valLoader, criterion):
     model.eval() 
@@ -129,11 +150,12 @@ def validateModel(model, valLoader, criterion):
     avgLoss = valLoss / len(valLoader)
     return avgLoss
 
-def testModel(modelName, emotionInput, baseModel = None):
+def testModel(modelName, emotionInput, baseModel = None, device=torch.device("cpu")):
     if baseModel:
         model = baseModel
     else:
         model = EmotionConfigurationModel()
+    model.to(device)
     
     # Load model weights from file
     path = MODELS_DIRECTORY + modelName + ".pth"
@@ -141,24 +163,25 @@ def testModel(modelName, emotionInput, baseModel = None):
 
     # Set model to evaluation mode
     model.eval()
-    inputTensor = torch.tensor([emotionInput], dtype=torch.float32)
+    inputTensor = torch.tensor([emotionInput], dtype=torch.float32).to(device)
     
     # Run inference (no gradient needed)
     with torch.no_grad():
         rawOutput = model(inputTensor)
     
-    return rawOutput.tolist()[0]
+    return rawOutput.cpu().tolist()[0]
 
-def runLearningCurveExperiment(fullTrainSet, fixedTestSet):
+def learningCurveExtrapolation(fullTrainSet, fixedTestSet):
     print("Starting Learning Curve Extrapolation\n")
     # Increments to test in
     dataFractions = [0.1, 0.25, 0.5, 0.75, 1.0]
     
     resultsSize = []
     resultsLoss = []
+    resultsBestLoss = []
     
     # Use a fixed test loader for fair comparison across all runs
-    testLoader = DataLoader(fixedTestSet, batch_size=BATCH_SIZE, shuffle=False)
+    testLoader = DataLoader(fixedTestSet, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
     TRIALS_PER_POINT = 2
 
     for fraction in dataFractions:
@@ -166,21 +189,23 @@ def runLearningCurveExperiment(fullTrainSet, fixedTestSet):
         if subsetSize < BATCH_SIZE: continue
         
         trialLosses = []
+        trialBestLosses = []
         
-        print(f"\nTraining with {subsetSize} samples ({fraction:.2f})...")
+        print(f"\nTraining with {subsetSize} samples ({fraction:.2f}):")
         
         for i in range(TRIALS_PER_POINT):
             # Create different seeded data
             subset, _ = random_split(fullTrainSet, [subsetSize, len(fullTrainSet) - subsetSize])
-            subsetLoader = DataLoader(subset, batch_size=BATCH_SIZE, shuffle=True)
+            subsetLoader = DataLoader(subset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
             
             # Create new model
-            currentModel = EmotionConfigurationModel()
+            currentModel = DeepEmotionModel().to(device)
             
-            # 3. Train
-            finalLoss = trainModel(currentModel, subsetLoader, valLoader=testLoader)
+            # Train
+            finalLoss, bestLoss = trainModel(currentModel, subsetLoader, valLoader=testLoader)
             trialLosses.append(finalLoss)
-            print(f"   Trial {i+1}: {finalLoss:.5f}")
+            trialBestLosses.append(bestLoss)
+            print(f" Trial {i+1}: {finalLoss:.5f}")
             
         # Average the trials
         avgLoss = sum(trialLosses) / TRIALS_PER_POINT
@@ -188,8 +213,9 @@ def runLearningCurveExperiment(fullTrainSet, fixedTestSet):
         
         resultsSize.append(subsetSize)
         resultsLoss.append(avgLoss)
+        resultsBestLoss.append(sum(trialBestLosses) / TRIALS_PER_POINT)
         
-    return resultsSize, resultsLoss
+    return resultsSize, resultsLoss, resultsBestLoss
 
 def mapRawOutput(rawOutput):
     #Using the constants from the data processing:
@@ -216,9 +242,16 @@ def mapRawOutput(rawOutput):
 if __name__ == "__main__":
     if not os.path.exists(MODELS_DIRECTORY):
         os.makedirs(MODELS_DIRECTORY)
+    # Use GPU as device if possible
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        print(f"Using GPU: {torch.cuda.get_device_name(0)}")
+    else:
+        device = torch.device("cpu")
+        print("Using CPU")
 
     # Get full dataset
-    fullDataset = EmotionConfigurationDataset(DATASETS_DIRECTORY + "trainingData.csv")
+    fullDataset = EmotionConfigurationDataset(DATASETS_DIRECTORY + "trainingData.csv", device=device, size=-1)
 
     # Create initial 80-20 Train-Test split
     totalSize = len(fullDataset)
@@ -229,11 +262,12 @@ if __name__ == "__main__":
     
     # random_split creates two Subset objects
     trainSet, testSet = random_split(fullDataset, [trainSize, testSize])
-    if LEARNING_CURVE_INTERPOLATION:
+    if EXECUTION_MODE == 0:
         import matplotlib.pyplot as plt
-        sizes, losses = runLearningCurveExperiment(trainSet, testSet)
+        sizes, losses, bestLosses = learningCurveExtrapolation(trainSet, testSet)
         plt.figure(figsize=(10, 6))
-        plt.plot(sizes, losses, marker='x', linestyle='-', color='b', label='Validation Loss')
+        plt.plot(sizes, losses, marker='x', linestyle='-', color='b', label='Final Validation Loss')
+        plt.plot(sizes, bestLosses, marker='x', linestyle='-', color='r', label='Best Validation Loss')
         plt.title('Dataset Samples against Model Performance')
         plt.xlabel('Training Sample Count')
         plt.ylabel('MSE Loss')
@@ -241,14 +275,22 @@ if __name__ == "__main__":
         plt.legend()
         plt.savefig('learningCurve.png')
         plt.show()
+    elif EXECUTION_MODE == 1:
+        # Train model regularly
+        currentModel = DeepEmotionModel().to(device)
+        trainLoader = DataLoader(trainSet, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
+        testLoader = DataLoader(testSet, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
+        # Train
+        finalLoss, bestLoss = trainModel(currentModel, trainLoader, valLoader=testLoader)
+        print(f"Final loss: {finalLoss}, Best validation loss: {bestLoss}")
     else:
-        # Shuffle training data to prevent order bias, but DO NOT shuffle test data
-        trainLoader = DataLoader(trainSet, batch_size=BATCH_SIZE, shuffle=True)
-        testLoader = DataLoader(testSet, batch_size=BATCH_SIZE, shuffle=False)
+        # Shuffle training data to prevent order bias, but not test data
+        trainLoader = DataLoader(trainSet, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
+        testLoader = DataLoader(testSet, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
 
         print(f"Data loaded ({trainSize} training, {testSize} testing)")
 
-        model = DeepEmotionModel()
+        model = DeepEmotionModel().to(device=device)
 
         # Train Model
         print("Start Training")
@@ -262,6 +304,6 @@ if __name__ == "__main__":
         # Verify on manual input for inference
         testInput = [0.5, 0.1, 0.9, 0.2, 0.0, 0.5, 1.0] 
         
-        rawResult = testModel("baseModel", testInput, baseModel=DeepEmotionModel())
+        rawResult = testModel("baseModel", testInput, baseModel=DeepEmotionModel(), device=device)
         mappedResult = mapRawOutput(rawResult)
         print(f"Inference: {mappedResult}")

@@ -150,7 +150,7 @@ def surpriseParams(targetLightType):
 def isLight(self, object):
     return object.type == 'LIGHT'
 
-parameterGenerationFunctions = [fearParams, angerParams, joyParams, sadParams, acceptanceParams, disgustParams, expectationParams, surpriseParams, ]
+parameterGenerationFunctions = [fearParams, angerParams, joyParams, sadParams, acceptanceParams, disgustParams, expectationParams, surpriseParams]
 
 def setupNoiseCompositor(scene, grain_intensity):
     if grain_intensity <= 0:
@@ -245,7 +245,7 @@ def randomiseConfig(context):
     if not (targetLight and targetLight.type == 'LIGHT' and camera and camera.type == 'CAMERA'
             and fillLight and fillLight.type == 'LIGHT' and rimLight and rimLight.type == 'LIGHT'):
         return
-    emotionChoice = math.floor(random.random() * 7)
+    emotionChoice = math.floor(random.random() * len(parameterGenerationFunctions))
     parameters = parameterGenerationFunctions[emotionChoice](targetLight.data.type)
 
     camera.data.lens_unit = 'FOV'

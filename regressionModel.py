@@ -6,10 +6,11 @@ import torch.optim as optim
 import pandas as pd
 import numpy as np
 from torch.utils.data import Dataset, DataLoader, random_split
+from modelUtils import *
 
 DATASETS_DIRECTORY = "./datasets/"
 MODELS_DIRECTORY = "./models/"
-EPOCH_COUNT = 50
+EPOCH_COUNT = 25
 BATCH_SIZE = 4
 LEARNING_RATE = 0.001
 # Constants specify output
@@ -17,7 +18,7 @@ VERBOSE_TRAINING = False
 # 0 - perform learning curve extrapolation
 # 1 - learning rate search
 # 2 - train model normally
-EXECUTION_MODE = 2
+EXECUTION_MODE = 3
 
 class EmotionConfigurationDataset(Dataset):
     def __init__(self, csvFile, device=torch.device("cpu"), size=-1):
@@ -82,22 +83,11 @@ def saveModel(model, modelName):
         modelName = modelName + ".pth"
     torch.save(model.state_dict(), MODELS_DIRECTORY + modelName)
 
-# Note: using a loaded model for predictions, use torch.no_grad() for resource saving
-# Need to check behaviour due to how AdamW optimiser operates:
-# https://docs.pytorch.org/docs/stable/generated/torch.optim.AdamW.html
-def loadModel(modelName):
-    if len(modelName)<4 or modelName[-4:] != ".pth":
-        modelName = modelName + ".pth"
-    newModel = EmotionConfigurationModel()
-    newModel.load_state_dict(torch.load(MODELS_DIRECTORY + modelName))
-    newModel.eval()
-    return newModel
-
-def trainModel(emotionConfigurationModel, trainLoader, valLoader=None, epochCount = EPOCH_COUNT):
+def trainModel(emotionConfigurationModel, trainLoader, valLoader=None, epochCount = EPOCH_COUNT, learningRate=LEARNING_RATE):
     lossCriterion = nn.MSELoss()
     optimiser = optim.AdamW(
-        emotionConfigurationModel.parameters(), lr=LEARNING_RATE,
-        weight_decay=0.01   # Critical for regularisation in small datasets
+        emotionConfigurationModel.parameters(), lr=learningRate,
+        weight_decay=0.01 # Critical for regularisation in small datasets
     )
     emotionConfigurationModel.train()
     # Track final validation loss
@@ -109,9 +99,9 @@ def trainModel(emotionConfigurationModel, trainLoader, valLoader=None, epochCoun
         # calculate loss for each epoch using the lossCriterion
         epochLoss = 0.0
         for batchData in trainLoader:
-            # Unpack the dictionary from the dataset
-            inputParameters = batchData['emotion'].to(device)
-            targetValues = batchData['configuration'].to(device)
+            # Unpack emotion and configuration vectors from the dataset
+            inputParameters = batchData['emotion']
+            targetValues = batchData['configuration']
             optimiser.zero_grad()
             # fwd pass
             predictedValues = emotionConfigurationModel(inputParameters)
@@ -150,27 +140,6 @@ def validateModel(model, valLoader, criterion):
     avgLoss = valLoss / len(valLoader)
     return avgLoss
 
-def testModel(modelName, emotionInput, baseModel = None, device=torch.device("cpu")):
-    if baseModel:
-        model = baseModel
-    else:
-        model = EmotionConfigurationModel()
-    model.to(device)
-    
-    # Load model weights from file
-    path = MODELS_DIRECTORY + modelName + ".pth"
-    model.load_state_dict(torch.load(path))
-
-    # Set model to evaluation mode
-    model.eval()
-    inputTensor = torch.tensor([emotionInput], dtype=torch.float32).to(device)
-    
-    # Run inference (no gradient needed)
-    with torch.no_grad():
-        rawOutput = model(inputTensor)
-    
-    return rawOutput.cpu().tolist()[0]
-
 def learningCurveExtrapolation(fullTrainSet, fixedTestSet):
     print("Starting Learning Curve Extrapolation\n")
     # Increments to test in
@@ -199,7 +168,7 @@ def learningCurveExtrapolation(fullTrainSet, fixedTestSet):
             subsetLoader = DataLoader(subset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
             
             # Create new model
-            currentModel = DeepEmotionModel().to(device)
+            currentModel = ImprovedDeepEmotionModel().to(device)
             
             # Train
             finalLoss, bestLoss = trainModel(currentModel, subsetLoader, valLoader=testLoader)
@@ -217,27 +186,23 @@ def learningCurveExtrapolation(fullTrainSet, fixedTestSet):
         
     return resultsSize, resultsLoss, resultsBestLoss
 
-def mapRawOutput(rawOutput):
-    #Using the constants from the data processing:
-    #PARAMETER_MIN_MAX = {
-    #    "hueSin": [-1, 1],
-    #    "hueCos": [-1, 1],
-    #    "saturation": [0.2, 1],
-    #    "light_energy": [math.log(50), math.log(3000)],
-    #    "grain": [0, 0.4],
-    #    "fov": [25, 100]
-    #}
-    parameters = {}
-    # Calculate hue
-    hSin, hCos = rawOutput[0] * 2 - 1, rawOutput[1] * 2 - 1
-    parameters["hue"] = math.atan2(hSin, hCos) / (2 * math.pi)
-    if parameters["hue"] < 0: parameters["hue"] += 1
-    parameters["saturation"] = rawOutput[2] * 0.8 + 0.2
-    # Using log laws, log 3000 - log 50 = log 60
-    parameters["lightEnergy"] = math.exp(rawOutput[3] * math.log(60) + math.log(50))
-    parameters["grain"] = rawOutput[4] * 0.4
-    parameters["fov"] = rawOutput[5] * 75 + 25
-    return parameters
+def learningRateEstimation(trainSet, testSet):
+    print("Starting Learning Rate Estimation\n")
+    # Increments to test in
+    lrIncrements = [1e-1,1e-2,5e-3,1e-3,1e-4,1e-5]
+    resultLRs = []
+    resultsLoss = []
+    resultsBestLoss = []
+    testLoader = DataLoader(testSet, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
+    trainLoader = DataLoader(trainSet, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
+    for learningRate in lrIncrements:
+        currentModel = ImprovedDeepEmotionModel().to(device)
+        # Train
+        finalLoss, bestLoss = trainModel(currentModel, trainLoader, valLoader=testLoader, learningRate=learningRate)
+        resultLRs.append(learningRate)
+        resultsLoss.append(finalLoss)
+        resultsBestLoss.append(bestLoss)
+    return resultLRs, resultsLoss, resultsBestLoss
 
 if __name__ == "__main__":
     if not os.path.exists(MODELS_DIRECTORY):
@@ -251,7 +216,7 @@ if __name__ == "__main__":
         print("Using CPU")
 
     # Get full dataset
-    fullDataset = EmotionConfigurationDataset(DATASETS_DIRECTORY + "trainingData.csv", device=device, size=-1)
+    fullDataset = EmotionConfigurationDataset(DATASETS_DIRECTORY + "trainingData.csv", device=device)
 
     # Create initial 80-20 Train-Test split
     totalSize = len(fullDataset)
@@ -262,7 +227,7 @@ if __name__ == "__main__":
     
     # random_split creates two Subset objects
     trainSet, testSet = random_split(fullDataset, [trainSize, testSize])
-    if EXECUTION_MODE == 0:
+    if EXECUTION_MODE == 0: # Plot accuracy against data set size
         import matplotlib.pyplot as plt
         sizes, losses, bestLosses = learningCurveExtrapolation(trainSet, testSet)
         plt.figure(figsize=(10, 6))
@@ -277,20 +242,40 @@ if __name__ == "__main__":
         plt.show()
     elif EXECUTION_MODE == 1:
         # Train model regularly
-        currentModel = DeepEmotionModel().to(device)
+        baseModel = EmotionConfigurationModel().to(device)
+        deepModel = DeepEmotionModel().to(device)
+        improvedModel = ImprovedDeepEmotionModel().to(device)
         trainLoader = DataLoader(trainSet, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
         testLoader = DataLoader(testSet, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
         # Train
-        finalLoss, bestLoss = trainModel(currentModel, trainLoader, valLoader=testLoader)
-        print(f"Final loss: {finalLoss}, Best validation loss: {bestLoss}")
-    else:
+        finalLoss, bestLoss = trainModel(baseModel, trainLoader, valLoader=testLoader)
+        print(f"---Base Model---\nFinal loss: {finalLoss}, Best validation loss: {bestLoss}\n")
+        #finalLoss, bestLoss = trainModel(deepModel, trainLoader, valLoader=testLoader)
+        #print(f"---Deep Model---\nFinal loss: {finalLoss}, Best validation loss: {bestLoss}\n")
+        #finalLoss, bestLoss = trainModel(improvedModel, trainLoader, valLoader=testLoader)
+        #print(f"---Improved Model---\nFinal loss: {finalLoss}, Best validation loss: {bestLoss}\n")
+    elif EXECUTION_MODE == 2:
+        import matplotlib.pyplot as plt
+        lrs, losses, bestLosses = learningRateEstimation(trainSet, testSet)
+        plt.figure(figsize=(10, 6))
+        plt.plot(lrs, losses, marker='x', linestyle='-', color='b', label='Final Validation Loss')
+        plt.plot(lrs, bestLosses, marker='x', linestyle='-', color='r', label='Best Validation Loss')
+        plt.title('Learning Rate against Model Performance')
+        plt.xlabel('Learning Rate')
+        plt.xscale('log')
+        plt.ylabel('MSE Loss')
+        plt.grid(True)
+        plt.legend()
+        plt.savefig('learningRateCurve.png')
+        plt.show()
+    else: # Train and save a finalised model
         # Shuffle training data to prevent order bias, but not test data
         trainLoader = DataLoader(trainSet, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
         testLoader = DataLoader(testSet, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
 
         print(f"Data loaded ({trainSize} training, {testSize} testing)")
 
-        model = DeepEmotionModel().to(device=device)
+        model = ImprovedDeepEmotionModel().to(device=device)
 
         # Train Model
         print("Start Training")
@@ -298,12 +283,12 @@ if __name__ == "__main__":
         print("Training complete")
 
         # Save model
-        saveModel(model, "baseModel")
+        saveModel(model, "emotionInferenceModel")
         print("Model saved")
 
         # Verify on manual input for inference
         testInput = [0.5, 0.1, 0.9, 0.2, 0.0, 0.5, 1.0] 
-        
-        rawResult = testModel("baseModel", testInput, baseModel=DeepEmotionModel(), device=device)
+        loadedModel = loadModel(MODELS_DIRECTORY + "emotionInferenceModel", device=device)
+        rawResult = performInference(loadedModel, testInput, device=device)
         mappedResult = mapRawOutput(rawResult)
         print(f"Inference: {mappedResult}")

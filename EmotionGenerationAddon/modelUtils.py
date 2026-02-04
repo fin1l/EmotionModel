@@ -5,24 +5,29 @@ import subprocess
 import json
 import math
 
-def performInference(emotionInput):
+def performInference():
     """
     Runs the inference as a background process
     """
+    scene = bpy.context.scene
     # Get worker script from add on directory
     addOnDirectory = os.path.dirname(os.path.realpath(__file__))
     workerScript = os.path.join(addOnDirectory, "inferenceWorker.py")
+    cmd = ["python", workerScript, scene.modelLoadingPath]
 
-    # sys.executable is Blender's Python installation
-    cmd = [sys.executable, workerScript, bpy.context.scene.modelLoadingPath]
-    
-    # Add the emotion inputs to the call
-    for val in emotionInput:
-        cmd.append(str(val))
+    if scene.useTextInput:
+        inputText = scene.emotionTextInput
+        cmd.append(inputText)
+    else:
+        emotionSliders = scene.emotionProps
+        emotionInput = [emotionSliders.anger, emotionSliders.disgust, emotionSliders.fear,
+                    emotionSliders.joy, emotionSliders.sadness, emotionSliders.surprise, emotionSliders.neutral]
+        # Add the emotion inputs to the call
+        for val in emotionInput:
+            cmd.append(str(val))
 
     # Run the inference as a subprocess, getting the output from the console
     try:
-        # This pauses Blender for ~0.2 seconds while the script runs
         result = subprocess.run(
             cmd, 
             capture_output=True, 

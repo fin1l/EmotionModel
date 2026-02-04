@@ -114,10 +114,7 @@ def generateConfig(context):
             and fillLight and fillLight.type == 'LIGHT' and rimLight and rimLight.type == 'LIGHT'):
         return
 
-    emotionSliders = scene.emotionProps
-    inputVector = [emotionSliders.anger, emotionSliders.disgust, emotionSliders.fear,
-                   emotionSliders.joy, emotionSliders.sadness, emotionSliders.surprise, emotionSliders.neutral]
-    rawOutput = modelUtils.performInference(inputVector)
+    rawOutput = modelUtils.performInference()
     parameters = modelUtils.mapRawOutput(rawOutput)
 
     camera.data.lens_unit = 'FOV'
@@ -261,14 +258,22 @@ class VIEW3D_PT_ConfigurationGenerationPanel(bpy.types.Panel):
         box.prop(scene, "modelLoadingPath")
         row = box.row()
         row.operator(WM_OT_LoadModel.bl_idname, icon='IMPORT')
-        #anger, disgust, fear, joy, sadness, surprise, neutral
-
+        row = layout.row(align=True)
+        row.prop(scene, "useTextInput", toggle=True, text="Input Mode: Text vs Sliders")
+        
         layout.separator()
-        layout.label(text="Emotion Inputs:")
-        # Manually draw all sliders
-        col = layout.column()
-        for p in ["anger", "disgust", "fear", "joy", "sadness", "surprise", "neutral"]:
-            col.prop(scene.emotionProps, p)
+        if scene.useTextInput:
+            box = layout.box()
+            box.label(text="Text Analysis:", icon='TEXT')
+            box.prop(scene, "emotionTextInput", text="")
+            box.label(text="(Enter text to drive emotions)", icon='INFO')
+        else:
+            #anger, disgust, fear, joy, sadness, surprise, neutral
+            layout.label(text="Emotion Inputs:")
+            # Manually draw all sliders
+            col = layout.column()
+            for p in ["anger", "disgust", "fear", "joy", "sadness", "surprise", "neutral"]:
+                col.prop(scene.emotionProps, p)
         
         layout.separator()
         row = box.row()
@@ -284,6 +289,19 @@ classes = (
 
 def register_properties():
     bpy.types.Scene.emotionProps = bpy.props.PointerProperty(type=EmotionSliders)
+
+    bpy.types.Scene.useTextInput = bpy.props.BoolProperty(
+        name="Use Text Input",
+        description="Toggle between manual sliders and text analysis",
+        default=False
+    )
+    
+    bpy.types.Scene.emotionTextInput = bpy.props.StringProperty(
+        name="Input Text",
+        description="Enter text to generate emotion values",
+        default=""
+    )
+
     bpy.types.Scene.modelLoadingPath = bpy.props.StringProperty(
         name="Model Path",
         description="Configuration Generating Model",

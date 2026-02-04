@@ -4,10 +4,13 @@ import json
 try:
     import torch
     import torch.nn as nn
+    import transformers
 except ImportError as e:
     # Print JSON error so Blender can read it
     print(json.dumps({"status": "error", "message": f"Worker Import Failed: {e}"}))
     sys.exit(1)
+# Disable verbose logging (as console output is read by modelUtils)
+transformers.logging.set_verbosity_error()
 
 class ImprovedDeepEmotionModel(nn.Module):
     def __init__(self):
@@ -23,18 +26,60 @@ class ImprovedDeepEmotionModel(nn.Module):
     def forward(self, inputTensor):
         return self.modelLayers(inputTensor)
 
+EMOTION_LABEL_INDICES = {label:index for index,label in enumerate(("anger","disgust","fear","joy","sadness","surprise","neutral"))}
+
+TEXT_MODEL_SUBDIR = "textModel"
+
+EMOTION_MODEL_NAME = "j-hartmann/emotion-english-distilroberta-base"
+
+def loadEmotionClassifier(path, modelName):
+    modelConfig = os.path.join(path, "config.json")
+    if os.path.exists(path) and os.path.exists(modelConfig):
+        modelSource = path
+        shouldSave = False
+    else:
+        modelSource = modelName
+        shouldSave = True
+    classifier = transformers.pipeline(
+        "text-classification", 
+        model=modelSource,
+        tokenizer=modelSource,
+        top_k=None
+    )
+    # Save the model if it was loaded for the first time
+    if shouldSave:
+        classifier.model.save_pretrained(path)
+        classifier.tokenizer.save_pretrained(path)
+    return classifier
+
+def getEmotionClassifierPath(modelPath):
+    modelDirectory = os.path.dirname(modelPath)
+    textModelPath = os.path.join(modelDirectory, TEXT_MODEL_SUBDIR)
+    os.makedirs(textModelPath, exist_ok=True)
+    return textModelPath
+
 if __name__ == "__main__":
     try:
-        if len(sys.argv) < 9:
+        inputs = []
+        if len(sys.argv) == 3:
+            #classifier = transformers.pipeline("text-classification", model=EMOTION_MODEL_NAME, top_k=None)
+            emotionClassifierPath = getEmotionClassifierPath(sys.argv[1])
+            classifier = loadEmotionClassifier(emotionClassifierPath, EMOTION_MODEL_NAME)
+            # Comes nested in another array - need to get first element
+            textEmotions = classifier(sys.argv[2])[0]
+            inputs = [0 for _ in range(7)]
+            for labelValuePair in textEmotions:
+                inputs[EMOTION_LABEL_INDICES[labelValuePair["label"]]] = labelValuePair["score"]
+        elif len(sys.argv) ==9:
+            inputs = [float(x) for x in sys.argv[2:]]
+        else:
             raise ValueError(f"Expected 9 arguments, found {len(sys.argv)}")
         # Unpack arguments
         modelPath = sys.argv[1]
-        inputs = [float(x) for x in sys.argv[2:]]
         
         # Use CUDA if possible
         if torch.cuda.is_available():
             device = torch.device("cuda")
-            print(f"Using GPU: {torch.cuda.get_device_name(0)}")
         else:
             device = torch.device("cpu")
         model = ImprovedDeepEmotionModel().to(device)

@@ -38,6 +38,7 @@ def plotDropoutConfigurations(configurationResults):
     plt.tight_layout()
     plt.show()
 
+import numpy as np
 # Results ported from regressionModel.py for plotting
 # Stops me having to run the whole training process to update formatting
 architectureResults = {
@@ -46,6 +47,7 @@ architectureResults = {
     "Deep Model 2": [0.00948,0.01023,0.01029,0.00847,0.00894,0.01056,0.00965,0.01045],
     "Refined Model": [0.00862,0.00883,0.01097,0.00834,0.00824,0.00957,0.00870,0.00994]
 }
+print(np.quantile(architectureResults["Refined Model"], [0.25, 0.5, 0.75]))
 dropoutRawResults = {
     "Aggressive Constant": [0.00930, 0.00943, 0.00871, 0.00934, 0.00932],
     "Moderate Constant": [0.00896, 0.00948, 0.00853, 0.00944, 0.00950],
@@ -54,5 +56,5 @@ dropoutRawResults = {
     "Baseline (Current)": [0.00862, 0.00947, 0.00790, 0.00910, 0.00959]
 }
 dropoutResults = {name: sum(losses)/len(losses) for name, losses in dropoutRawResults.items()}
-#plotKFoldResults(architectureResults)
-plotDropoutConfigurations(dropoutResults)
+plotKFoldResults(architectureResults)
+#plotDropoutConfigurations(dropoutResults)

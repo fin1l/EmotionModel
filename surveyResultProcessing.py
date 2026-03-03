@@ -21,7 +21,7 @@ baseResponseStrings = ["Anger", "Joy", "Fear", "Surprise", "Sadness",
 BASE_RESPONSE_VECTORS = np.array([getEmotionVector(response) for response in baseResponseStrings])
 
 totalResponses = [[getEmotionVector(response)] for response in baseResponseStrings]#[[] for _ in range(16)]
-with open("23-02-survey-responses.csv") as f:
+with open("03-03-Survey-Responses.csv") as f:
     surveyData = csv.DictReader(f)
     for row in surveyData:
         # Skip rows that failed the attention check
@@ -44,13 +44,18 @@ squaredAngles = np.arccos(questionSpreadAngleCos) ** 2
 
 # Question variances - can't just use built in variance
 questionVariances = squaredAngles.mean(axis=1)
-MAX_VARIANCE = np.arccos(1/np.sqrt(7)) ** 2
-questionNormalisedVariances = questionVariances/MAX_VARIANCE
+# Maximal variance is different for a single emotion or a dyad
+MAX_VARIANCE_SINGLE = np.arccos(1/np.sqrt(7)) ** 2
+MAX_VARIANCE_DYADIC = np.arccos(np.sqrt(2/7)) ** 2
+questionNormalisedVariances = questionVariances
+questionNormalisedVariances[:6] /= MAX_VARIANCE_SINGLE
+questionNormalisedVariances[6:] /= MAX_VARIANCE_DYADIC
+print(MAX_VARIANCE_SINGLE, MAX_VARIANCE_DYADIC)
 
 print(f"Dataset size: {responseArray.shape[1]} responses")
-print(f"Cosine distances for each question: " + "\n".join(f"Q{i}: {questionCosDistances[i-1]}" for i in range(1,17))+"\n")
-print(f"Average vectors for each question: " + "\n".join(f"Q{i}: {questionMeanVectors[i-1]}" for i in range(1,17))+"\n")
-print(f"Normalised variances for each question: " + "\n".join(f"Q{i}: {questionNormalisedVariances[i-1]}" for i in range(1,17))+"\n")
+#print(f"Cosine distances for each question: " + "\n".join(f"Q{i}: {questionCosDistances[i-1]}" for i in range(1,17))+"\n")
+#print(f"Average vectors for each question: " + "\n".join(f"Q{i}: {questionMeanVectors[i-1]}" for i in range(1,17))+"\n")
+#print(f"Normalised variances for each question: " + "\n".join(f"Q{i}: {questionNormalisedVariances[i-1]}" for i in range(1,17))+"\n")
 
 # DATA VISUALISATION
 

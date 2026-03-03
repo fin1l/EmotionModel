@@ -28,7 +28,6 @@ def runBatchProcess():
         print("Error: Target Light is not set in the scene.")
         return
 
-    # 3. Execute the Operator
     print(f"Starting batch generation of {scene.batchImageCount} images...")
     
     try:

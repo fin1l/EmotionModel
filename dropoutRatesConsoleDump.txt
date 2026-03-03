@@ -1,0 +1,71 @@
+Starting 5-Fold Cross Validation for Dropout Configurations
+
+Evaluating Dropout Strategy: Aggressive Constant (Rates: [0.4, 0.4, 0.4])
+Early termination at 24 epochs
+Currently at 0.00942212482991681, achieved 0.00929939412520394
+  Fold 1 Best Validation Loss: 0.00930
+  Fold 2 Best Validation Loss: 0.00943
+Early termination at 15 epochs
+Currently at 0.009497196656076293, achieved 0.008711869250967529
+  Fold 3 Best Validation Loss: 0.00871
+  Fold 4 Best Validation Loss: 0.00934
+  Fold 5 Best Validation Loss: 0.00932
+Average Validation Loss for Aggressive Constant: 0.00922
+
+Evaluating Dropout Strategy: Moderate Constant (Rates: [0.2, 0.2, 0.2])
+Early termination at 24 epochs
+Currently at 0.00924467849908737, achieved 0.008964075093881608
+  Fold 1 Best Validation Loss: 0.00896
+Early termination at 22 epochs
+Currently at 0.009681005370447356, achieved 0.009479631041331323
+  Fold 2 Best Validation Loss: 0.00948
+Early termination at 21 epochs
+Currently at 0.008555856684185688, achieved 0.00853190734283225
+  Fold 3 Best Validation Loss: 0.00853
+  Fold 4 Best Validation Loss: 0.00944
+Early termination at 18 epochs
+Currently at 0.009515493087535508, achieved 0.009501528350692057
+  Fold 5 Best Validation Loss: 0.00950
+Average Validation Loss for Moderate Constant: 0.00918
+
+Evaluating Dropout Strategy: Aggressive Taper (Rates: [0.4, 0.2, 0.0])
+  Fold 1 Best Validation Loss: 0.00880
+Early termination at 16 epochs
+Currently at 0.010131581903410538, achieved 0.009801970728660665
+  Fold 2 Best Validation Loss: 0.00980
+Early termination at 22 epochs
+Currently at 0.008938182044025522, achieved 0.008099547358372084
+  Fold 3 Best Validation Loss: 0.00810
+Early termination at 22 epochs
+Currently at 0.010438826126185713, achieved 0.009645892581376448
+  Fold 4 Best Validation Loss: 0.00965
+  Fold 5 Best Validation Loss: 0.00928
+Average Validation Loss for Aggressive Taper: 0.00913
+
+Evaluating Dropout Strategy: Gentle Taper (Rates: [0.3, 0.2, 0.1])
+Early termination at 17 epochs
+Currently at 0.009673499125922315, achieved 0.00954479416770446
+  Fold 1 Best Validation Loss: 0.00954
+Early termination at 17 epochs
+Currently at 0.01003766014237588, achieved 0.009883508873264927
+  Fold 2 Best Validation Loss: 0.00988
+Early termination at 12 epochs
+Currently at 0.010048239574260218, achieved 0.009302989869035062
+  Fold 3 Best Validation Loss: 0.00930
+Early termination at 19 epochs
+Currently at 0.010111347475921444, achieved 0.009653686748065698
+  Fold 4 Best Validation Loss: 0.00965
+  Fold 5 Best Validation Loss: 0.00897
+Average Validation Loss for Gentle Taper: 0.00947
+
+Evaluating Dropout Strategy: Baseline (Current) (Rates: [0.3, 0.3, 0.2])
+  Fold 1 Best Validation Loss: 0.00862
+  Fold 2 Best Validation Loss: 0.00947
+  Fold 3 Best Validation Loss: 0.00790
+Early termination at 24 epochs
+Currently at 0.009802709954738172, achieved 0.00910497886423436
+  Fold 4 Best Validation Loss: 0.00910
+Early termination at 17 epochs
+Currently at 0.012157723471596589, achieved 0.00958856236130816
+  Fold 5 Best Validation Loss: 0.00959
+Average Validation Loss for Baseline (Current): 0.00894

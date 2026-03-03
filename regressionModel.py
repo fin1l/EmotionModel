@@ -1,5 +1,6 @@
 import os
 import math
+from matplotlib import colors
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -7,6 +8,8 @@ import pandas as pd
 import numpy as np
 from torch.utils.data import Dataset, DataLoader, random_split
 from modelUtils import *
+from sklearn.model_selection import KFold
+from torch.utils.data import Subset
 
 DATASETS_DIRECTORY = "./datasets/"
 MODELS_DIRECTORY = "./models/"
@@ -18,7 +21,10 @@ VERBOSE_TRAINING = False
 # 0 - perform learning curve extrapolation
 # 1 - learning rate search
 # 2 - train model normally
-EXECUTION_MODE = 3
+# 3 - k-fold validation across multiple architectures
+# 4 - k-fold validation across dropout configurations
+# 5 - train final model and save
+EXECUTION_MODE = 4
 
 class EmotionConfigurationDataset(Dataset):
     def __init__(self, csvFile, device=torch.device("cpu"), size=-1):
@@ -67,6 +73,25 @@ class DeepEmotionModel(nn.Module):
             nn.Linear(7, 256),
             nn.ELU(),
             nn.Linear(256, 64),
+            nn.ELU(),
+            nn.Linear(64, 32),
+            nn.ELU(),
+            nn.Linear(32, 6),
+            nn.Sigmoid()
+        )
+    
+    def forward(self, inputTensor):
+        return self.modelLayers(inputTensor)
+
+class DeepEmotionModel2(nn.Module):
+    def __init__(self):
+        super(DeepEmotionModel2, self).__init__()
+        self.modelLayers = nn.Sequential(
+            nn.Linear(7, 256),
+            nn.ELU(),
+            nn.Linear(256, 128),
+            nn.ELU(),
+            nn.Linear(128, 64),
             nn.ELU(),
             nn.Linear(64, 32),
             nn.ELU(),
@@ -204,6 +229,104 @@ def learningRateEstimation(trainSet, testSet):
         resultsBestLoss.append(bestLoss)
     return resultLRs, resultsLoss, resultsBestLoss
 
+def evaluateArchitecturesWithKFold(fullDataset, modelClasses, numFolds=5, batchSize=BATCH_SIZE, epochs=EPOCH_COUNT, device=torch.device("cpu")):
+    print(f"Starting {numFolds}-Fold Cross Validation\n")
+    kFold = KFold(n_splits=numFolds, shuffle=True, random_state=42)
+    architectureResults = {}
+
+    for modelName, modelClass in modelClasses.items():
+        print(f"Evaluating Architecture: {modelName}")
+        foldLosses = []
+
+        # Iterate through the generated folds
+        for fold, (trainIndices, valIndices) in enumerate(kFold.split(fullDataset)):
+            
+            # Create subsets for fold + data loaders
+            trainSubset = Subset(fullDataset, trainIndices)
+            valSubset = Subset(fullDataset, valIndices)
+            trainLoader = DataLoader(trainSubset, batch_size=batchSize, shuffle=True, num_workers=0)
+            valLoader = DataLoader(valSubset, batch_size=batchSize, shuffle=False, num_workers=0)
+            currentModel = modelClass().to(device)
+            
+            # Take best loss (ignore final to ignore overfitting)
+            finalLoss, bestLoss = trainModel(currentModel, trainLoader, valLoader=valLoader, epochCount=epochs)
+            foldLosses.append(bestLoss)
+            print(f"  Fold {fold + 1} Best Validation Loss: {bestLoss:.5f}")
+        # Note that this is *mean* not *median* (shown in boxplot)
+        architectureResults[modelName] = foldLosses
+        avgLoss = sum(foldLosses) / numFolds
+        print(f"Average Validation Loss for {modelName}: {avgLoss:.5f}\n")
+
+    return architectureResults
+
+def plotKFoldResults(architectureResults):
+    import matplotlib.pyplot as plt
+    
+    plt.figure(figsize=(10, 6))
+    modelNames = list(architectureResults.keys())
+    # losses for each fold
+    modelLosses = list(architectureResults.values())
+    # boxplot to show variance across folds for each architecture
+    bplot = plt.boxplot(modelLosses, tick_labels=modelNames, patch_artist=True)
+    for patch in bplot['boxes']:
+        patch.set_facecolor('lightblue')
+        patch.set_edgecolor('black')
+    plt.title('Architecture Performance (K-Fold Cross Validation)')
+    plt.ylabel('MSE Loss')
+    plt.xlabel('Model Architecture')
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.savefig('kFoldArchitectureComparison.png')
+    plt.show()
+
+# Lay out results in console similarly to the architecture comparison
+def evaluateDropoutConfigurations(fullDataset, dropoutConfigs, numFolds=5, batchSize=BATCH_SIZE, epochs=EPOCH_COUNT, device=torch.device("cpu")):
+    print(f"Starting {numFolds}-Fold Cross Validation for Dropout Configurations\n")
+    kFold = KFold(n_splits=numFolds, shuffle=True, random_state=42)
+    configurationResults = {}
+
+    for configName, rates in dropoutConfigs.items():
+        print(f"Evaluating Dropout Strategy: {configName} (Rates: {rates})")
+        foldLosses = []
+
+        for fold, (trainIndices, valIndices) in enumerate(kFold.split(fullDataset)):
+            trainSubset = Subset(fullDataset, trainIndices)
+            valSubset = Subset(fullDataset, valIndices)
+            
+            trainLoader = DataLoader(trainSubset, batch_size=batchSize, shuffle=True, num_workers=0)
+            valLoader = DataLoader(valSubset, batch_size=batchSize, shuffle=False, num_workers=0)
+            # Uses a modifiable model to change individual dropout rates
+            currentModel = ModifiableRateModel(dropoutRates=rates).to(device)
+            
+            finalLoss, bestLoss = trainModel(currentModel, trainLoader, valLoader=valLoader, epochCount=epochs)
+            foldLosses.append(bestLoss)
+            print(f"  Fold {fold + 1} Best Validation Loss: {bestLoss:.5f}")
+        # Only storing mean
+        avgLoss = sum(foldLosses) / numFolds
+        configurationResults[configName] = avgLoss
+        print(f"Average Validation Loss for {configName}: {avgLoss:.5f}\n")
+        
+    return configurationResults
+
+def plotDropoutConfigurations(configurationResults):
+    import matplotlib.pyplot as plt
+    
+    configNames = list(configurationResults.keys())
+    avgLosses = list(configurationResults.values())
+    
+    plt.figure(figsize=(10, 6))
+    # Use bar chart instead
+    plt.bar(configNames, avgLosses, color='skyblue', edgecolor='black')
+    plt.title('Dropout Strategy Performance (K-Fold Cross Validation)')
+    plt.ylabel('Average MSE Loss')
+    plt.xlabel('Dropout Configuration')
+    
+    # Slight rotation to stop label overlap
+    plt.xticks(rotation=15)
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.savefig('dropoutStrategyComparison.png')
+    plt.tight_layout()
+    plt.show()
+
 if __name__ == "__main__":
     if not os.path.exists(MODELS_DIRECTORY):
         os.makedirs(MODELS_DIRECTORY)
@@ -249,11 +372,7 @@ if __name__ == "__main__":
         testLoader = DataLoader(testSet, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
         # Train
         finalLoss, bestLoss = trainModel(baseModel, trainLoader, valLoader=testLoader)
-        print(f"---Base Model---\nFinal loss: {finalLoss}, Best validation loss: {bestLoss}\n")
-        #finalLoss, bestLoss = trainModel(deepModel, trainLoader, valLoader=testLoader)
-        #print(f"---Deep Model---\nFinal loss: {finalLoss}, Best validation loss: {bestLoss}\n")
-        #finalLoss, bestLoss = trainModel(improvedModel, trainLoader, valLoader=testLoader)
-        #print(f"---Improved Model---\nFinal loss: {finalLoss}, Best validation loss: {bestLoss}\n")
+        print(f"Base Model\nFinal loss: {finalLoss}, Best validation loss: {bestLoss}\n")
     elif EXECUTION_MODE == 2:
         import matplotlib.pyplot as plt
         lrs, losses, bestLosses = learningRateEstimation(trainSet, testSet)
@@ -268,6 +387,41 @@ if __name__ == "__main__":
         plt.legend()
         plt.savefig('learningRateCurve.png')
         plt.show()
+    elif EXECUTION_MODE == 3: # k-fold validation across multiple architectures
+        modelsToTest = {
+            "Base Model": EmotionConfigurationModel,
+            "Deep Model": DeepEmotionModel,
+            "Deep Model 2": DeepEmotionModel2,
+            "Refined Model": ImprovedDeepEmotionModel
+        }
+        
+        kFoldResults = evaluateArchitecturesWithKFold(
+            fullDataset=fullDataset, 
+            modelClasses=modelsToTest, 
+            numFolds=8, 
+            batchSize=BATCH_SIZE, 
+            epochs=EPOCH_COUNT, 
+            device=device
+        )
+        
+        plotKFoldResults(kFoldResults)
+    elif EXECUTION_MODE == 4: # Check refined model dropouts with k-fold validation
+        dropoutConfigs = {
+            "Aggressive Constant": [0.4, 0.4, 0.4],
+            "Moderate Constant": [0.2, 0.2, 0.2],
+            "Aggressive Taper": [0.4, 0.2, 0.0],
+            "Gentle Taper": [0.3, 0.2, 0.1],
+            "Baseline (Current)": [0.3, 0.3, 0.2]
+        }
+        configResults = evaluateDropoutConfigurations(
+            fullDataset=fullDataset, 
+            dropoutConfigs=dropoutConfigs, 
+            numFolds=5, 
+            batchSize=BATCH_SIZE, 
+            epochs=EPOCH_COUNT, 
+            device=device
+        )
+        plotDropoutConfigurations(configResults)
     else: # Train and save a finalised model
         # Shuffle training data to prevent order bias, but not test data
         trainLoader = DataLoader(trainSet, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)

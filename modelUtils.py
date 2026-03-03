@@ -35,6 +35,38 @@ class ImprovedDeepEmotionModel(nn.Module):
     def forward(self, inputTensor):
         return self.modelLayers(inputTensor)
 
+# Flexible version of improved model for displaying dropout effects
+class ModifiableRateModel(nn.Module):
+    def __init__(self, dropoutRates=None):
+        super(ModifiableRateModel, self).__init__()
+        
+        self.modelLayers = nn.Sequential(
+            nn.Linear(7, 256),
+            nn.BatchNorm1d(256),
+            nn.ELU(),
+            nn.Dropout(dropoutRates[0] if dropoutRates else 0.1), # 30% dropout chance
+            
+            nn.Linear(256, 128),
+            nn.BatchNorm1d(128),
+            nn.ELU(),
+            nn.Dropout(dropoutRates[1] if dropoutRates else 0.1),
+
+            # Step down: 128 -> 64
+            nn.Linear(128, 64),
+            nn.BatchNorm1d(64),
+            nn.ELU(),
+            nn.Dropout(dropoutRates[2] if dropoutRates else 0.1), # Reduced dropout
+            # Step down: 64 -> 32
+            nn.Linear(64, 32),
+            nn.ELU(),
+
+            nn.Linear(32, 6),
+            nn.Sigmoid()
+        )
+    
+    def forward(self, inputTensor):
+        return self.modelLayers(inputTensor)
+
 
 def loadModel(modelName, device=torch.device("cpu")):
     if len(modelName)<4 or modelName[-4:] != ".pth":

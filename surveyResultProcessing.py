@@ -1,8 +1,15 @@
 import csv
 import math
 import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+import matplotlib.cm as cm
+import matplotlib.colors as mcolors
+from adjustText import adjust_text
+
+EMOTIONS = ["Anger", "Disgust", "Fear", "Joy", "Sadness", "Surprise", "Neutral"]
 EMOTION_INDICES = {emotion: index for index, emotion in
-                   enumerate(["Anger", "Disgust", "Fear", "Joy", "Sadness", "Surprise", "Neutral"])}
+                   enumerate(EMOTIONS)}
 ROOT_TWO_WEIGHTING = 1.0 / math.sqrt(2)
 def getEmotionVector(inputString):
     emotionVector = np.zeros(7, dtype=float)
@@ -21,7 +28,7 @@ baseResponseStrings = ["Anger", "Joy", "Fear", "Surprise", "Sadness",
 BASE_RESPONSE_VECTORS = np.array([getEmotionVector(response) for response in baseResponseStrings])
 
 totalResponses = [[getEmotionVector(response)] for response in baseResponseStrings]#[[] for _ in range(16)]
-with open("03-03-Survey-Responses.csv") as f:
+with open("Image Emotion Labelling_Submissions_2026-03-08.csv") as f:
     surveyData = csv.DictReader(f)
     for row in surveyData:
         # Skip rows that failed the attention check
@@ -53,21 +60,18 @@ questionNormalisedVariances[6:] /= MAX_VARIANCE_DYADIC
 print(MAX_VARIANCE_SINGLE, MAX_VARIANCE_DYADIC)
 
 print(f"Dataset size: {responseArray.shape[1]} responses")
-#print(f"Cosine distances for each question: " + "\n".join(f"Q{i}: {questionCosDistances[i-1]}" for i in range(1,17))+"\n")
-#print(f"Average vectors for each question: " + "\n".join(f"Q{i}: {questionMeanVectors[i-1]}" for i in range(1,17))+"\n")
-#print(f"Normalised variances for each question: " + "\n".join(f"Q{i}: {questionNormalisedVariances[i-1]}" for i in range(1,17))+"\n")
+print(f"Cosine distances for each question:\n" + "\n".join(f"Q{i}: {questionCosDistances[i-1]}" for i in range(1,17))+"\n")
+print(f"Average vectors for each question:\n" + "\n".join(f"Q{i}: {questionMeanVectors[i-1]}" for i in range(1,17))+"\n")
+for questionIndex, meanVector in enumerate(questionMeanVectors):
+    if questionIndex < 6:
+        maxInd = meanVector.argmax()
+        print(f"Q{questionIndex+1}: {EMOTIONS[maxInd]} at {meanVector[maxInd]:.2f}")
+    else:
+        topTwoIndices = meanVector.argsort()[-2:][::-1]
+        print(f"Q{questionIndex+1}: {EMOTIONS[topTwoIndices[0]]} ({meanVector[topTwoIndices[0]]:.2f}), {EMOTIONS[topTwoIndices[1]]} ({meanVector[topTwoIndices[1]]:.2f})")
+print(f"Normalised variances for each question:\n" + "\n".join(f"Q{i}: {questionNormalisedVariances[i-1]}" for i in range(1,17))+"\n")
 
-# DATA VISUALISATION
-
-import matplotlib.pyplot as plt
-import pandas as pd
-import numpy as np
-import matplotlib.cm as cm
-import matplotlib.colors as mcolors
-from adjustText import adjust_text
-
-# Create a DataFrame for easier plotting
-
+# Create a DataFrame for plotting
 df = pd.DataFrame({
     'Question': [f'Q{i}' for i in range(1,17)],
     'Cosine_Distance': questionCosDistances,
@@ -98,7 +102,7 @@ scatterAxis.set_yticks(ticks)
 scatterAxis.grid(True, linestyle=':', alpha=0.6)
 
 # Sorted bar chart view - rank by cos distance and colour by variance
-df_sorted = df.sort_values('Cosine_Distance', ascending=True)
+sortedDataframe = df.sort_values('Cosine_Distance', ascending=True)
 fig2, ax2 = plt.subplots(figsize=(10, 8))
 ax2.set_xlim(0, 1)
 ax2.set_xticks(ticks)
@@ -106,8 +110,8 @@ ax2.set_xticks(ticks)
 norm = mcolors.Normalize(vmin=0, vmax=1)
 cmap = cm.RdYlGn_r
 
-# Horizontal Bar Chart
-bars = ax2.barh(df_sorted['Question'], df_sorted['Cosine_Distance'], color=cmap(norm(df_sorted['Variance'])))
+# Horizontal Bar Chart (opted not to use in the report)
+bars = ax2.barh(sortedDataframe['Question'], sortedDataframe['Cosine_Distance'], color=cmap(norm(sortedDataframe['Variance'])))
 # Colour bar for context
 sm = cm.ScalarMappable(cmap=cmap, norm=norm)
 sm.set_array([])

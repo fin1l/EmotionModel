@@ -1,7 +1,5 @@
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset
-import pandas as pd
 import math
 
 class ImprovedDeepEmotionModel(nn.Module):
@@ -12,22 +10,17 @@ class ImprovedDeepEmotionModel(nn.Module):
             nn.Linear(7, 256),
             nn.BatchNorm1d(256),
             nn.ELU(),
-            nn.Dropout(0.3), # 30% dropout chance
-            
+            nn.Dropout(0.3),
             nn.Linear(256, 128),
             nn.BatchNorm1d(128),
             nn.ELU(),
             nn.Dropout(0.3),
-
-            # Step down: 128 -> 64
             nn.Linear(128, 64),
             nn.BatchNorm1d(64),
             nn.ELU(),
-            nn.Dropout(0.2), # Reduced dropout
-            # Step down: 64 -> 32
+            nn.Dropout(0.2),
             nn.Linear(64, 32),
             nn.ELU(),
-
             nn.Linear(32, 6),
             nn.Sigmoid()
         )
@@ -35,7 +28,7 @@ class ImprovedDeepEmotionModel(nn.Module):
     def forward(self, inputTensor):
         return self.modelLayers(inputTensor)
 
-# Flexible version of improved model for displaying dropout effects
+# Flexible version of improved model for testing dropout impact
 class ModifiableRateModel(nn.Module):
     def __init__(self, dropoutRates=None):
         super(ModifiableRateModel, self).__init__()
@@ -44,22 +37,17 @@ class ModifiableRateModel(nn.Module):
             nn.Linear(7, 256),
             nn.BatchNorm1d(256),
             nn.ELU(),
-            nn.Dropout(dropoutRates[0] if dropoutRates else 0.1), # 30% dropout chance
-            
+            nn.Dropout(dropoutRates[0] if dropoutRates else 0.1),
             nn.Linear(256, 128),
             nn.BatchNorm1d(128),
             nn.ELU(),
             nn.Dropout(dropoutRates[1] if dropoutRates else 0.1),
-
-            # Step down: 128 -> 64
             nn.Linear(128, 64),
             nn.BatchNorm1d(64),
             nn.ELU(),
-            nn.Dropout(dropoutRates[2] if dropoutRates else 0.1), # Reduced dropout
-            # Step down: 64 -> 32
+            nn.Dropout(dropoutRates[2] if dropoutRates else 0.1),
             nn.Linear(64, 32),
             nn.ELU(),
-
             nn.Linear(32, 6),
             nn.Sigmoid()
         )
@@ -76,7 +64,6 @@ def loadModel(modelName, device=torch.device("cpu")):
     newModel.eval()
     return newModel
 
-# Note: using a loaded model for predictions, use torch.no_grad() for resource saving
 def performInference(loadedModel, emotionInput, device=torch.device("cpu")):
     inputTensor = torch.tensor([emotionInput], dtype=torch.float32).to(device)
     
@@ -87,7 +74,7 @@ def performInference(loadedModel, emotionInput, device=torch.device("cpu")):
     return rawOutput.cpu().tolist()[0]
 
 def mapRawOutput(rawOutput):
-    #Using the constants from the data processing:
+    # Using the constants from the data processing, for reference:
     #PARAMETER_MIN_MAX = {
     #    "hueSin": [-1, 1],
     #    "hueCos": [-1, 1],

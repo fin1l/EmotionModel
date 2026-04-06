@@ -21,10 +21,10 @@ import re # used for extracting numbers
 # Use HSV instead of RGB for colour (more cinematic, hues, saturation, and value represent emotion better)
 import colorsys
 
-# want high value for all of them so do not bother randomising value
 def wrapHue(hue):
     return hue % 1.0
 
+# High value for all of them so do not bother randomising value
 def randomHueSat(hMin, hMax, sMin, sMax):
     return random.uniform(hMin, hMax), random.uniform(sMin, sMax)
 # Use exp for light energy if it isn't a sun - otherwise use uniform
@@ -91,7 +91,7 @@ def fearParams(targetLightType):
         params['light_energy'] = random.uniform(0.05,0.2)
     else:
         params['light_energy'] = math.exp(random.uniform(math.log(50), math.log(200)))
-    # randomly pick extreme
+    # Randomly pick extreme
     if random.random()>0.5:
         params['fov'] = random.uniform(25, 35)
     else:
@@ -112,7 +112,7 @@ def disgustParams(targetLightType):
         params['light_energy'] = random.uniform(0.05,0.2)
     else:
         params['light_energy'] = math.exp(random.uniform(math.log(300), math.log(800)))
-    # randomly pick extreme
+    # Randomly pick extreme
     if random.random()>0.5:
         params['fov'] = random.uniform(25, 35)
     else:
@@ -135,7 +135,7 @@ def expectationParams(targetLightType):
 
 def surpriseParams(targetLightType):
     print("Surprise params")
-    # deep, cool colours, high FOV, low grain
+    # Deep, cool colours, high FOV, low grain
     params = {}
     params['h'], params['s'] = randomHueSat(0.6, 0.75, 0.8, 1)
     if targetLightType == 'SUN':
@@ -168,10 +168,6 @@ def setupNoiseCompositor(scene, grain_intensity):
         scene.compositing_node_group = tree
     else:
         tree = scene.compositing_node_group
-    
-    # reset nodes
-    #if tree.nodes:
-    #    tree.nodes.clear()
     
     # Take render input
     renderLayersNode = None
@@ -267,7 +263,7 @@ def randomiseConfig(context):
     fillSat = parameters['s'] * 0.5 # Fill is usually less saturated
     fillRgb = colorsys.hsv_to_rgb(fillHue, fillSat, 1.0)
     fillLight.data.color = fillRgb
-    # fill light should be set to have a 4:1 ratio
+    # Fill light should be set to have a 4:1 ratio
     fillLight.data.energy = targetLight.data.energy * 0.25
     if fillLight.data.type != 'SUN' and fillLight.data.node_tree:
         for node in fillLight.data.node_tree.nodes:
@@ -276,7 +272,7 @@ def randomiseConfig(context):
                     node.inputs["Strength"].default_value = fillLight.data.energy
                 break
 
-    # rim light should be punchy and powerful - generally a slightly different hue
+    # Rim light should be punchy and powerful - generally a slightly different hue
     rimHue = wrapHue(parameters['h'] + 0.1) 
     rimRgb = colorsys.hsv_to_rgb(rimHue, parameters['s'], 1.0)
     rimLight.data.color = rimRgb
@@ -328,9 +324,9 @@ class WM_OT_BatchGenerate(bpy.types.Operator):
 
     def execute(self, context):
         scene = context.scene
-        output_dir = bpy.path.abspath(scene.batchOutputPath)
-        imageDirectory = os.path.join(output_dir, "images")
-        jsonPath = os.path.join(output_dir, "labels.json")
+        outputDirectory = bpy.path.abspath(scene.batchOutputPath)
+        imageDirectory = os.path.join(outputDirectory, "images")
+        jsonPath = os.path.join(outputDirectory, "labels.json")
         # Prioritise getting the most recent json label, fall back to existing image
         numberMatchingPattern = re.compile("\d+")
         dataList = []
@@ -395,7 +391,7 @@ class VIEW3D_PT_RandomConfigurationPanel(bpy.types.Panel):
         layout = self.layout
         scene = context.scene
         
-        # add property selector for light source
+        # Add property selector for light source
         box = layout.box()
         box.label(text="Scene Setup")
         box.prop(scene, "targetLight")
@@ -477,6 +473,6 @@ def unregister():
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
 
-# can be run from terminal
+# Can be run from terminal (for automation)
 if __name__ == "__main__":
     register()

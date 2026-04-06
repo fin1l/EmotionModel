@@ -29,8 +29,8 @@ def loadData(dataPath):
         
     return data, imagesPath, JSONPath
 
-def getUnlabeledInd(data, start_index=0):
-    for index in range(start_index, len(data)):
+def getUnlabeledInd(data, startIndex=0):
+    for index in range(startIndex, len(data)):
         if not data[index].get("labels") or len(data[index]["labels"]) == 0:
             return index
     return None
@@ -52,21 +52,19 @@ def createMainUI():
     ]
     return sg.Window("Data Labelling", layout, finalize=True, resizable=True)
 
-def resize_image(image_path, max_size=(200, 200)):
+def resize_image(imgPath, maxSize=(200, 200)):
     """Resize image to fit within max_size while maintaining aspect ratio"""
-    img = Image.open(image_path)
-    img.thumbnail(max_size, Image.Resampling.LANCZOS)
+    img = Image.open(imgPath)
+    img.thumbnail(maxSize, Image.Resampling.LANCZOS)
     
-    # Convert to bytes
+    # Convert image to bytes
     bio = io.BytesIO()
     img.save(bio, format='PNG')
     return bio.getvalue()
 
 def loadImage(window, imagePath):
     try:
-        #window["-IMAGE-DISPLAY-"].update(filename=imagePath)
         window["-IMAGE-DISPLAY-"].update(data=resize_image(imagePath))
-        #window["-IMAGE-DISPLAY-"].update(size=(100,100))
     except Exception as e:
         print(f"Error loading image {imagePath}: {e}")
         window["-IMAGE-DISPLAY-"].update(data=None)
@@ -80,19 +78,19 @@ def main():
     data, imagesPath, JSONPath = loadData(dataFolder)
     if data is None:
         return
-    current_index = getUnlabeledInd(data, 0)
-    if current_index is None:
+    curIndex = getUnlabeledInd(data, 0)
+    if curIndex is None:
         sg.popup("Labelling done")
         return
     # Handle case of more images than labels
     minImageName = sorted(os.listdir(imagesPath))
     minImageName = minImageName[0]
     minImageIndex = int(minImageName.split(".")[0][5:])
-    current_index = max(current_index, minImageIndex)
+    curIndex = max(curIndex, minImageIndex)
     
     window = createMainUI()
 
-    entry = data[current_index]
+    entry = data[curIndex]
     imagePath = os.path.join(imagesPath, entry["image_id"])
     window["-IMAGE-ID-"].update(entry["image_id"])
     loadImage(window, imagePath)
@@ -106,27 +104,27 @@ def main():
         if event == "-SAVE-":
             labels = {}
             for i, key in enumerate(EMOTION_LABELS):
-                slider_key = f"-SLIDER-{i}-"
-                labels[key] = values[slider_key]
+                curSlider = f"-SLIDER-{i}-"
+                labels[key] = values[curSlider]
             
             # save labels + save JSON file
-            data[current_index]["labels"] = labels
+            data[curIndex]["labels"] = labels
             try:
                 with open(JSONPath, 'w') as f:
                     json.dump(data, f, indent=2)
-                window["-STATUS-"].update(f"Saved {data[current_index]['image_id']}")
+                window["-STATUS-"].update(f"Saved {data[curIndex]['image_id']}")
             except Exception as e:
                 window["-STATUS-"].update(f"Error saving: {e}")
                 continue
-            current_index = getUnlabeledInd(data, current_index + 1)
-            if current_index is None:
+            curIndex = getUnlabeledInd(data, curIndex + 1)
+            if curIndex is None:
                 sg.popup("Labelling done")
                 break
             
             for i in range(len(EMOTION_LABELS)):
                 window[f"-SLIDER-{i}-"].update(0.0)
             
-            entry = data[current_index]
+            entry = data[curIndex]
             imagePath = os.path.join(imagesPath, entry["image_id"])
             window["-IMAGE-ID-"].update(entry["image_id"])
             loadImage(window, imagePath)

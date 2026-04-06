@@ -22,9 +22,6 @@ def runBatchProcess():
     else:
         scene.batchImageCount = 5
     if not scene.targetLight:
-        # scene.targetLight = bpy.data.objects.get("KeyLight")
-        # scene.fillLight = bpy.data.objects.get("FillLight")
-        # scene.rimLight = bpy.data.objects.get("RimLight")
         print("Error: Target Light is not set in the scene.")
         return
 

@@ -136,7 +136,7 @@ def generateConfig(context):
     fillSat = parameters['saturation'] * 0.5 # Fill is usually less saturated
     fillRgb = colorsys.hsv_to_rgb(fillHue, fillSat, 1.0)
     fillLight.data.color = fillRgb
-    # fill light should be set to have a 4:1 ratio
+    # Fill light should be set to have a 4:1 ratio
     fillLight.data.energy = targetLight.data.energy * 0.25
     if fillLight.data.type != 'SUN' and fillLight.data.node_tree:
         for node in fillLight.data.node_tree.nodes:
@@ -145,7 +145,7 @@ def generateConfig(context):
                     node.inputs["Strength"].default_value = fillLight.data.energy
                 break
 
-    # rim light should be punchy and powerful - generally a slightly different hue
+    # Rim light should be punchy and powerful - generally a slightly different hue
     rimHue = wrapHue(parameters['hue'] + 0.1) 
     rimRgb = colorsys.hsv_to_rgb(rimHue, parameters['saturation'], 1.0)
     rimLight.data.color = rimRgb
@@ -162,8 +162,7 @@ class EmotionSliders(bpy.types.PropertyGroup):
     """
     This class holds the 7 slider values
     """
-    # Define 7 floats. 
-    # 'subtype="FACTOR"' forces the UI to look like a slider (0 to 1).
+    # Define 7 emotion floats
     anger: bpy.props.FloatProperty(
         name="Anger",
         default=0.0, min=0.0, max=1.0, subtype='FACTOR'

@@ -1,18 +1,17 @@
 import os
 import math
-from matplotlib import colors
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import pandas as pd
-import numpy as np
 from torch.utils.data import Dataset, DataLoader, random_split
 from modelUtils import *
 from sklearn.model_selection import KFold
 from torch.utils.data import Subset
+import matplotlib.pyplot as plt
 
-DATASETS_DIRECTORY = "./datasets/"
-MODELS_DIRECTORY = "./models/"
+DATASETS_DIRECTORY = "./Datasets/"
+MODELS_DIRECTORY = "./Models/"
 EPOCH_COUNT = 25
 BATCH_SIZE = 4
 LEARNING_RATE = 0.001
@@ -24,7 +23,7 @@ VERBOSE_TRAINING = False
 # 3 - k-fold validation across multiple architectures
 # 4 - k-fold validation across dropout configurations
 # 5 - train final model and save
-EXECUTION_MODE = 4
+EXECUTION_MODE = 5
 
 class EmotionConfigurationDataset(Dataset):
     def __init__(self, csvFile, device=torch.device("cpu"), size=-1):
@@ -121,14 +120,14 @@ def trainModel(emotionConfigurationModel, trainLoader, valLoader=None, epochCoun
     plateauedEpochs = 0
     PLATEAU_THRESHOLD = 5
     for epochNumber in range(epochCount):
-        # calculate loss for each epoch using the lossCriterion
+        # Calculate loss for each epoch using the lossCriterion
         epochLoss = 0.0
         for batchData in trainLoader:
             # Unpack emotion and configuration vectors from the dataset
             inputParameters = batchData['emotion']
             targetValues = batchData['configuration']
             optimiser.zero_grad()
-            # fwd pass
+            # Forward pass
             predictedValues = emotionConfigurationModel(inputParameters)
             currentLoss = lossCriterion(predictedValues, targetValues)
             currentLoss.backward()
@@ -260,13 +259,11 @@ def evaluateArchitecturesWithKFold(fullDataset, modelClasses, numFolds=5, batchS
     return architectureResults
 
 def plotKFoldResults(architectureResults):
-    import matplotlib.pyplot as plt
-    
     plt.figure(figsize=(10, 6))
     modelNames = list(architectureResults.keys())
-    # losses for each fold
+    # Losses for each fold
     modelLosses = list(architectureResults.values())
-    # boxplot to show variance across folds for each architecture
+    # Boxplot to show variance across folds for each architecture
     bplot = plt.boxplot(modelLosses, tick_labels=modelNames, patch_artist=True)
     for patch in bplot['boxes']:
         patch.set_facecolor('lightblue')
@@ -308,8 +305,6 @@ def evaluateDropoutConfigurations(fullDataset, dropoutConfigs, numFolds=5, batch
     return configurationResults
 
 def plotDropoutConfigurations(configurationResults):
-    import matplotlib.pyplot as plt
-    
     configNames = list(configurationResults.keys())
     avgLosses = list(configurationResults.values())
     
@@ -320,7 +315,7 @@ def plotDropoutConfigurations(configurationResults):
     plt.ylabel('Average MSE Loss')
     plt.xlabel('Dropout Configuration')
     
-    # Slight rotation to stop label overlap
+    # Skew labels to stop overlap
     plt.xticks(rotation=15)
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.savefig('dropoutStrategyComparison.png')
@@ -348,10 +343,8 @@ if __name__ == "__main__":
     print(f"Training dataset size: {trainSize}")
     testSize = totalSize - trainSize
     
-    # random_split creates two Subset objects
     trainSet, testSet = random_split(fullDataset, [trainSize, testSize])
     if EXECUTION_MODE == 0: # Plot accuracy against data set size
-        import matplotlib.pyplot as plt
         sizes, losses, bestLosses = learningCurveExtrapolation(trainSet, testSet)
         plt.figure(figsize=(10, 6))
         plt.plot(sizes, losses, marker='x', linestyle='-', color='b', label='Final Validation Loss')
@@ -364,17 +357,16 @@ if __name__ == "__main__":
         plt.savefig('learningCurve.png')
         plt.show()
     elif EXECUTION_MODE == 1:
-        # Train model regularly
+        # Train model normally
         baseModel = EmotionConfigurationModel().to(device)
         deepModel = DeepEmotionModel().to(device)
         improvedModel = ImprovedDeepEmotionModel().to(device)
         trainLoader = DataLoader(trainSet, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
         testLoader = DataLoader(testSet, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
-        # Train
+        # Train - update model used as fit
         finalLoss, bestLoss = trainModel(baseModel, trainLoader, valLoader=testLoader)
         print(f"Base Model\nFinal loss: {finalLoss}, Best validation loss: {bestLoss}\n")
     elif EXECUTION_MODE == 2:
-        import matplotlib.pyplot as plt
         lrs, losses, bestLosses = learningRateEstimation(trainSet, testSet)
         plt.figure(figsize=(10, 6))
         plt.plot(lrs, losses, marker='x', linestyle='-', color='b', label='Final Validation Loss')
@@ -430,19 +422,13 @@ if __name__ == "__main__":
         print(f"Data loaded ({trainSize} training, {testSize} testing)")
 
         model = ImprovedDeepEmotionModel().to(device=device)
-
-        # Train Model
-        print("Start Training")
         trainModel(model, trainLoader, valLoader=testLoader)
-        print("Training complete")
-
-        # Save model
         saveModel(model, "emotionInferenceModel")
-        print("Model saved")
 
-        # Verify on manual input for inference
+        # Verify on hardcoded input for inference, loading model from weights
         testInput = [0.5, 0.1, 0.9, 0.2, 0.0, 0.5, 1.0] 
+        emotionOrder = ["anger", "disgust", "fear", "joy", "sadness", "surprise", "neutral"]
         loadedModel = loadModel(MODELS_DIRECTORY + "emotionInferenceModel", device=device)
         rawResult = performInference(loadedModel, testInput, device=device)
         mappedResult = mapRawOutput(rawResult)
-        print(f"Inference: {mappedResult}")
+        print(mappedResult)

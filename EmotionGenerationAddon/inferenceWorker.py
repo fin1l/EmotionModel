@@ -28,7 +28,7 @@ class ImprovedDeepEmotionModel(nn.Module):
 
 EMOTION_LABEL_INDICES = {label:index for index,label in enumerate(("anger","disgust","fear","joy","sadness","surprise","neutral"))}
 
-TEXT_MODEL_SUBDIR = "textModel"
+TEXT_MODEL_SUBDIR = "TextModel"
 
 EMOTION_MODEL_NAME = "j-hartmann/emotion-english-distilroberta-base"
 

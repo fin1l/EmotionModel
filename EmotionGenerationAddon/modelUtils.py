@@ -1,5 +1,4 @@
 import bpy
-import sys
 import os
 import subprocess
 import json
@@ -57,7 +56,7 @@ def performInference():
         return [0.0] * 6
 
 def mapRawOutput(rawOutput):
-    #Using the constants from the data processing:
+    # Using the constants from the data processing, for reference:
     #PARAMETER_MIN_MAX = {
     #    "hueSin": [-1, 1],
     #    "hueCos": [-1, 1],

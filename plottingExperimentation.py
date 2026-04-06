@@ -1,11 +1,12 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
 def plotKFoldResults(architectureResults):
-    import matplotlib.pyplot as plt
-    
     plt.figure(figsize=(10, 6))
     modelNames = list(architectureResults.keys())
-    # losses for each fold
+    # Losses for each fold
     modelLosses = list(architectureResults.values())
-    # boxplot to show variance across folds for each architecture
+    # Boxplot to show variance across folds for each architecture
     bplot = plt.boxplot(modelLosses, tick_labels=modelNames, patch_artist=True)
     print([datum.get_ydata() for datum in bplot['medians']])
     for patch in bplot['boxes']:
@@ -19,8 +20,6 @@ def plotKFoldResults(architectureResults):
     plt.show()
 
 def plotDropoutConfigurations(configurationResults):
-    import matplotlib.pyplot as plt
-    
     configNames = list(configurationResults.keys())
     avgLosses = list(configurationResults.values())
     
@@ -30,15 +29,12 @@ def plotDropoutConfigurations(configurationResults):
     plt.title('Dropout Strategy Performance (K-Fold Cross Validation)')
     plt.ylabel('Average MSE Loss')
     plt.xlabel('Dropout Configuration')
-    
-    # Slight rotation to stop label overlap
     plt.xticks(rotation=15)
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.savefig('dropoutStrategyComparison.png')
     plt.tight_layout()
     plt.show()
 
-import numpy as np
 # Results ported from regressionModel.py for plotting
 # Stops me having to run the whole training process to update formatting
 architectureResults = {

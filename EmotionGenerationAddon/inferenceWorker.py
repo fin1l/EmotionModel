@@ -6,10 +6,9 @@ try:
     import torch.nn as nn
     import transformers
 except ImportError as e:
-    # Print JSON error so Blender can read it
-    print(json.dumps({"status": "error", "message": f"Worker Import Failed: {e}"}))
+    print(json.dumps({"status": "error", "message": f"Worker script imports failed: {e}"}))
     sys.exit(1)
-# Disable verbose logging (as console output is read by modelUtils)
+# Disable verbose logging (as console output is read)
 transformers.logging.set_verbosity_error()
 
 class ImprovedDeepEmotionModel(nn.Module):
@@ -62,7 +61,6 @@ if __name__ == "__main__":
     try:
         inputs = []
         if len(sys.argv) == 3:
-            #classifier = transformers.pipeline("text-classification", model=EMOTION_MODEL_NAME, top_k=None)
             emotionClassifierPath = getEmotionClassifierPath(sys.argv[1])
             classifier = loadEmotionClassifier(emotionClassifierPath, EMOTION_MODEL_NAME)
             # Comes nested in another array - need to get first element

@@ -15,8 +15,8 @@ import os
 import colorsys
 import math
 import importlib
-from . import modelUtils
-importlib.reload(modelUtils)
+from . import inferenceParent
+importlib.reload(inferenceParent)
 
 # A poll function to ensure only Light objects can be selected
 def isLight(self, object):
@@ -114,8 +114,8 @@ def generateConfig(context):
             and fillLight and fillLight.type == 'LIGHT' and rimLight and rimLight.type == 'LIGHT'):
         return
 
-    rawOutput = modelUtils.performInference()
-    parameters = modelUtils.mapRawOutput(rawOutput)
+    rawOutput = inferenceParent.performInference()
+    parameters = inferenceParent.mapRawOutput(rawOutput)
 
     camera.data.lens_unit = 'FOV'
     camera.data.angle = math.radians(parameters['fov'])

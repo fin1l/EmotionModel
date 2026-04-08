@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+# Code is repeated from regressionModel.py
 def plotKFoldResults(architectureResults):
     plt.figure(figsize=(10, 6))
     modelNames = list(architectureResults.keys())
@@ -53,4 +54,4 @@ dropoutRawResults = {
 }
 dropoutResults = {name: sum(losses)/len(losses) for name, losses in dropoutRawResults.items()}
 plotKFoldResults(architectureResults)
-#plotDropoutConfigurations(dropoutResults)
+plotDropoutConfigurations(dropoutResults)
